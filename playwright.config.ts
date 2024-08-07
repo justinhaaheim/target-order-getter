@@ -15,24 +15,46 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
 
   /* Run tests in files in parallel */
-  fullyParallel: true,
+  fullyParallel: false,
 
   /* Configure projects for major browsers */
   projects: [
+    // Setup project
     {
+      name: 'setup',
+      testMatch: /.*\.setup\.ts/,
+
+      use: {
+        ...devices['Desktop Chrome'],
+        channel: 'chrome', // Use branded Chrome browser
+      },
+    },
+
+    {
+      // dependencies: ['setup'],
       name: 'chromium',
-      use: {...devices['Desktop Chrome']},
+      use: {
+        ...devices['Desktop Chrome'],
+        channel: 'chrome', // Use branded Chrome browser
+        // Use prepared auth state.
+        storageState: 'playwright/.auth/user.json',
+      },
     },
 
-    {
-      name: 'firefox',
-      use: {...devices['Desktop Firefox']},
-    },
+    // {
+    //   name: 'chromium',
+    //   use: {...devices['Desktop Chrome']},
+    // },
 
-    {
-      name: 'webkit',
-      use: {...devices['Desktop Safari']},
-    },
+    // {
+    //   name: 'firefox',
+    //   use: {...devices['Desktop Firefox']},
+    // },
+
+    // {
+    //   name: 'webkit',
+    //   use: {...devices['Desktop Safari']},
+    // },
 
     /* Test against mobile viewports. */
     // {
@@ -73,7 +95,8 @@ export default defineConfig({
   },
 
   /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  // workers: process.env.CI ? 1 : undefined,
+  workers: 1,
 
   /* Run your local dev server before starting the tests */
   // webServer: {
