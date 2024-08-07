@@ -17,7 +17,8 @@
     "signal": "concurrently --names \"TS,LINT,PRETTIER\" -c \"bgBlack.bold,bgRed.bold,bgCyan.bold\" \"npm run ts-check\" \"npm run lint\" \"npm run prettier-check\"",
     "ts-check": "tsc --noEmit",
     "ts-check-masked": "npm run ts-check",
-    "login": "op run --env-file .env.local --",
+    "login": "op run --env-file .env.local -- playwright test",
+    "test": "playwright test",
     "prepare": "husky install"
   },
   "dependencies": {
