@@ -17,6 +17,7 @@
     "signal": "concurrently --names \"TS,LINT,PRETTIER\" -c \"bgBlack.bold,bgRed.bold,bgCyan.bold\" \"npm run ts-check\" \"npm run lint\" \"npm run prettier-check\"",
     "ts-check": "tsc --noEmit",
     "ts-check-masked": "npm run ts-check",
+    "login": "op run --env-file .env.local --",
     "prepare": "husky install"
   },
   "dependencies": {
@@ -29,6 +30,8 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.46.0",
+    "@types/node": "^22.1.0",
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
     "@typescript-eslint/eslint-plugin": "5.62.0",
