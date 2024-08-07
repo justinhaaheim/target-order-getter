@@ -1,0 +1,33 @@
+{
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "[javascript]": {
+    "editor.codeActionsOnSave": [
+      // Run ESLint fixers _before_ prettier to ensure the user doesn't need to do multiple saves
+      "source.fixAll.eslint",
+      "source.fixAll.format"
+    ]
+  },
+  "[typescript]": {
+    "editor.codeActionsOnSave": [
+      // Run ESLint fixers _before_ prettier to ensure the user doesn't need to do multiple saves
+      "source.fixAll.eslint",
+      "source.fixAll.format"
+    ]
+  },
+  "[typescriptreact]": {
+    "editor.codeActionsOnSave": [
+      // Run ESLint fixers _before_ prettier to ensure the user doesn't need to do multiple saves
+      "source.fixAll.eslint",
+      "source.fixAll.format"
+    ]
+  },
+  // "typescript.tsdk": "node_modules/typescript/lib",
+  "search.exclude": {
+    "**/.yarn": true
+  }
+  // "eslint.debug": true
+  // "eslint.options": {
+  //   "extensions": [".cjs", ".js", ".jsx", ".ts", ".tsx"]
+  // }
+}
