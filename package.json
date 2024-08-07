@@ -1,0 +1,14 @@
+{
+  "name": "target-order-getter",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.46.0",
+    "@types/node": "^22.1.0"
+  }
+}
