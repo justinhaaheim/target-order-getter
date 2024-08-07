@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "login": "op run --env-file .env.local -- "
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
