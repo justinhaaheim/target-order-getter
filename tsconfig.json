@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "es2022",
+    "allowJs": true,
+    "checkJs": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node", // Change the value of moduleResolution to "node"
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true
+  }
+}
