@@ -37,7 +37,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         channel: 'chrome', // Use branded Chrome browser
         // Use prepared auth state.
-        storageState: 'playwright/.auth/user.json',
+        storageState: 'playwright/.auth/user-testFixture.json',
       },
     },
 

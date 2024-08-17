@@ -6,7 +6,7 @@ import {test as setup} from '@playwright/test';
  * in non-headless mode and sign in with my passkey.
  */
 
-const authFile = 'playwright/.auth/user.json';
+const authFile = 'playwright/.auth/user-testFixture.json';
 
 setup('authenticate', async ({page}) => {
   setup.slow();
