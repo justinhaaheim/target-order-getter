@@ -1,3 +1,5 @@
+import type {BrowserContextOptions} from 'playwright';
+
 import path from 'node:path';
 
 // This is an absolute path to the auth file.
@@ -7,6 +9,10 @@ export const playwrightAuthFilePath = path.join(
   '..',
   'playwright/.auth/user-2.json',
 );
+
+export const playwrightAuthContextOptions: BrowserContextOptions = {
+  storageState: playwrightAuthFilePath,
+};
 
 // const COOKIE_TO_CHECK_FOR_EXPIRATION = 'accessToken';
 const COOKIE_TO_CHECK_FOR_EXPIRATION = 'refreshToken';

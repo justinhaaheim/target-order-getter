@@ -1,7 +1,7 @@
 // import assert from 'node:assert';
 // import {chromium, devices} from 'playwright';
 
-import {playwrightAuthFilePath} from './Auth';
+import {playwrightAuthContextOptions} from './Auth';
 import {authenticateIfNeeded, getNewBrowser} from './Setup';
 
 (async () => {
@@ -10,7 +10,7 @@ import {authenticateIfNeeded, getNewBrowser} from './Setup';
 
   // Setup
   const {browser, context, page} = await getNewBrowser({
-    browserContextOptions: {storageState: playwrightAuthFilePath},
+    browserContextOptions: playwrightAuthContextOptions,
   });
 
   // Subscribe to 'request' and 'response' events.

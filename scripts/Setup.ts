@@ -7,7 +7,46 @@ import type {
 
 import {chromium, devices} from 'playwright';
 
-import {getIsAuthFileCookieStillValid, playwrightAuthFilePath} from './Auth';
+import {
+  getIsAuthFileCookieStillValid,
+  playwrightAuthContextOptions,
+  playwrightAuthFilePath,
+} from './Auth';
+
+// Should only be viewable when logged in
+const TARGET_ORDER_PAGE_URL = 'https://www.target.com/orders';
+
+type GetNewBrowserConfig = {
+  browserContextOptions?: BrowserContextOptions;
+};
+
+export async function canNavigateToURL(
+  url: string,
+  config: GetNewBrowserConfig = {},
+): Promise<boolean> {
+  const {browser, context, page} = await getNewBrowser(config);
+
+  await page.goto(url);
+
+  let canNavigateToURL = false;
+  const currentUrl = page.url();
+
+  // TODO: We probably want something less brittle/more robust here than just the simple startsWith check.
+  if (currentUrl.startsWith(url)) {
+    canNavigateToURL = true;
+    console.log(`✅ Successfully navigated to: ${currentUrl}`, {
+      currentUrl,
+      url,
+    });
+  } else {
+    console.warn('🚫 Failed to navigate to url', {currentUrl, url});
+  }
+
+  await context.close();
+  await browser.close();
+
+  return canNavigateToURL;
+}
 
 export async function authenticateIfNeeded(): Promise<void> {
   console.log('🔍 Checking if auth file is still valid...');
@@ -18,7 +57,18 @@ export async function authenticateIfNeeded(): Promise<void> {
 
   if (isAuthCookieValid) {
     console.log('✅ Auth file is still valid.');
-    return;
+
+    const canNavigate = await canNavigateToURL(TARGET_ORDER_PAGE_URL, {
+      browserContextOptions: playwrightAuthContextOptions,
+    });
+
+    if (canNavigate) {
+      console.log('✅ Successfully navigated to:', TARGET_ORDER_PAGE_URL);
+      return;
+    }
+    console.warn(
+      `🚫 Failed to navigate to ${TARGET_ORDER_PAGE_URL} even though auth cookies appear to be valid. Attempting to reauthenticate...`,
+    );
   }
   console.log('🚫 Auth file is expired. Re-authenticating...');
   await authenticateAndStoreState({authFile: playwrightAuthFilePath});
@@ -74,16 +124,12 @@ export async function authenticateAndStoreState({
   });
 }
 
-type GetNewBrowserProps = {
-  browserContextOptions?: BrowserContextOptions;
-};
-
-export async function getNewBrowser(props: GetNewBrowserProps): Promise<{
+export async function getNewBrowser(config: GetNewBrowserConfig): Promise<{
   browser: Browser;
   context: BrowserContext;
   page: Page;
 }> {
-  const {browserContextOptions} = props ?? {};
+  const {browserContextOptions} = config ?? {};
 
   const browser = await chromium.launch({
     channel: 'chrome',
