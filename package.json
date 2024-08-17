@@ -51,6 +51,7 @@
     "eslint-plugin-typescript-sort-keys": "2.3.0",
     "husky": "^8.0.3",
     "lint-staged": "^14.0.1",
+    "playwright": "1.46.1",
     "prettier": "3.0.3",
     "typescript": "^5.0.2",
     "vite": "^4.4.5"
