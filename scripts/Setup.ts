@@ -7,7 +7,36 @@ import type {
 
 import {chromium, devices} from 'playwright';
 
-export const authFileRelativePath = 'playwright/.auth/user.json';
+import {getIsAuthFileCookieStillValid, playwrightAuthFilePath} from './Auth';
+
+export async function authenticateIfNeeded(): Promise<void> {
+  console.log('🔍 Checking if auth file is still valid...');
+
+  const isAuthCookieValid = await getIsAuthFileCookieStillValid(
+    playwrightAuthFilePath,
+  );
+
+  if (isAuthCookieValid) {
+    console.log('✅ Auth file is still valid.');
+    return;
+  }
+  console.log('🚫 Auth file is expired. Re-authenticating...');
+  await authenticateAndStoreState({authFile: playwrightAuthFilePath});
+
+  // Let's check again:
+
+  const isValidAfterReauthentication = await getIsAuthFileCookieStillValid(
+    playwrightAuthFilePath,
+  );
+
+  if (!isValidAfterReauthentication) {
+    throw new Error(
+      '🚫 Auth file is still expired after re-authentication. This should not happen. Exiting.',
+    );
+  } else {
+    console.log('✅ Auth file has been updated.');
+  }
+}
 
 export async function authenticateAndStoreState({
   authFile,
@@ -15,7 +44,11 @@ export async function authenticateAndStoreState({
   authFile: string;
 }) {
   // Setup
-  const {browser, context, page} = await getNewBrowser({});
+  const {page} = await getNewBrowser({});
+
+  // await page.goto(ONE_PASSWORD_CHROME_EXTENSION_URL);
+
+  // await page.waitForTimeout(60 * 1000);
 
   // Perform authentication steps. Replace these actions with your own.
   await page.goto('https://www.target.com/orders');
@@ -36,7 +69,9 @@ export async function authenticateAndStoreState({
 
   // End of authentication steps.
 
-  await page.context().storageState({path: authFile});
+  await page.context().storageState({
+    path: authFile,
+  });
 }
 
 type GetNewBrowserProps = {
@@ -50,7 +85,10 @@ export async function getNewBrowser(props: GetNewBrowserProps): Promise<{
 }> {
   const {browserContextOptions} = props ?? {};
 
-  const browser = await chromium.launch({headless: false});
+  const browser = await chromium.launch({
+    channel: 'chrome',
+    headless: false, // For branded chrome browser
+  });
   const context = await browser.newContext({
     ...devices['Desktop Chrome'],
     ...browserContextOptions,

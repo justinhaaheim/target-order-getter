@@ -1,20 +1,25 @@
 // import assert from 'node:assert';
 // import {chromium, devices} from 'playwright';
 
-import {
-  authenticateAndStoreState,
-  authFileRelativePath,
-  getNewBrowser,
-} from './Setup';
+import {playwrightAuthFilePath} from './Auth';
+import {authenticateIfNeeded, getNewBrowser} from './Setup';
 
 (async () => {
   // Set auth credentials
-  await authenticateAndStoreState({authFile: authFileRelativePath});
+  await authenticateIfNeeded();
 
   // Setup
   const {browser, context, page} = await getNewBrowser({
-    browserContextOptions: {storageState: authFileRelativePath},
+    browserContextOptions: {storageState: playwrightAuthFilePath},
   });
+
+  // Subscribe to 'request' and 'response' events.
+  page.on('request', (request) =>
+    console.log('>>', request.method(), request.url()),
+  );
+  page.on('response', (response) =>
+    console.log('<<', response.status(), response.url()),
+  );
 
   await page.goto('https://www.target.com/orders');
 

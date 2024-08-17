@@ -1,4 +1,4 @@
-import {expect, test as setup} from '@playwright/test';
+import {test as setup} from '@playwright/test';
 
 /**
  * NOTE: Target is setup with 2fac for normal login, so whether we use that or passkeys
