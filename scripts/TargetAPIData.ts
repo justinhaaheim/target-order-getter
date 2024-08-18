@@ -1,6 +1,10 @@
-import type {BrowserContext, Page} from 'playwright';
+/**
+ * TODO: Write a function that extracts categorization info about the items from the order main page, using order_lines[number].item.product_classification.product_type_name
+ */
 
-import {TARGET_ORDER_PAGE_URL} from './Constants';
+import type {BrowserContext, Page, Response} from 'playwright';
+
+import {TARGET_API_HOSTNAME, TARGET_ORDER_PAGE_URL} from './Constants';
 import {loadMoreOrdersUntilOrderCount} from './Helpers';
 
 export type TargetAPIOrderHistoryItem = {
@@ -22,6 +26,8 @@ type GetTargetAPIOrderHistoryConfig = {
   orderCount: number;
   page: Page;
 };
+
+type ResponseListener = (response: Response) => any;
 
 export function getTargetOrderURL(orderNumber: string): string {
   return `${TARGET_ORDER_PAGE_URL}/${orderNumber}`;
@@ -165,8 +171,13 @@ export async function getTargetAPIOrderInvoiceOverviewData({
 
   const invoicesOverviewMap = new Map();
 
-  const onInvoicesResponse = async (response) => {
-    if (response.url().includes(`orders/${orderNumber}/invoices`)) {
+  const onInvoicesResponse = async (response: Response) => {
+    const url = new URL(response.url());
+    if (
+      url.host === TARGET_API_HOSTNAME &&
+      url.pathname.includes(`orders/${orderNumber}/invoices`)
+    ) {
+      console.log('INVOICE_OVERVIEW_RESPONSE', response.url());
       const data = await response.json();
       console.log('Received invoice data:', data);
 
@@ -235,7 +246,7 @@ export async function getTargetAPIOrderIndividualInvoiceData({
   await page.goto(invoiceURL);
 
   // Wait for the invoice number to be populated in the UI
-  await page.getByText(/Invoice number\: \d+/i).waitFor();
+  await page.getByText(/Invoice number: \d+/i).waitFor();
 
   if (invoiceData == null) {
     throw new Error(
@@ -255,6 +266,7 @@ export async function getTargetAPIOrderAllInvoiceData({
   orderNumber: string;
   page: Page;
 }): Promise<unknown> {
+  console.log('Getting invoice overview data for order:', orderNumber);
   const invoiceOverviewData = await getTargetAPIOrderInvoiceOverviewData({
     orderNumber,
     page,
@@ -264,6 +276,9 @@ export async function getTargetAPIOrderAllInvoiceData({
     async (invoiceOverviewItem) => {
       const newPage = await context.newPage();
 
+      console.log(
+        `Getting individual invoice data for order ${orderNumber} and invoice ${invoiceOverviewItem['id']}...`,
+      );
       const data = await getTargetAPIOrderIndividualInvoiceData({
         invoiceNumber: invoiceOverviewItem['id'],
         orderNumber,
@@ -271,7 +286,7 @@ export async function getTargetAPIOrderAllInvoiceData({
       });
 
       // TODO: close pages, if it's useful
-      // await newPage.close();
+      await newPage.close();
 
       return data;
     },
