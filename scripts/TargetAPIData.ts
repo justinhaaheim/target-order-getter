@@ -156,6 +156,8 @@ export async function getTargetAPIOrderHistoryData({
   // Load more orders and capture the data that comes in
   await loadMoreOrdersUntilOrderCount({orderCount: orderCount, page});
 
+  // TODO: use waitForResponse to make sure we have the data: https://playwright.dev/docs/api/class-page#page-wait-for-response
+
   const orderData = orderResponsePages.flat();
 
   console.log(
@@ -310,7 +312,6 @@ export async function getTargetAPIOrderIndividualInvoiceData({
 export async function getTargetAPIOrderAllInvoiceData({
   orderNumber,
   page,
-  context,
 }: {
   context: BrowserContext;
   orderNumber: string;
@@ -322,25 +323,28 @@ export async function getTargetAPIOrderAllInvoiceData({
     page,
   });
 
-  const invoiceDataPromises = invoiceOverviewData.map(
-    async (invoiceOverviewItem) => {
-      const newPage = await context.newPage();
-
+  const invoiceDataGetters = invoiceOverviewData.map(
+    (invoiceOverviewItem) => async (pageForIndividualData: Page) => {
       console.log(
         `Getting individual invoice data for order ${orderNumber} and invoice ${invoiceOverviewItem['id']}...`,
       );
       const data = await getTargetAPIOrderIndividualInvoiceData({
         invoiceNumber: invoiceOverviewItem['id'],
         orderNumber,
-        page: newPage,
+        page: pageForIndividualData,
       });
-
-      // TODO: close pages, if it's useful
-      await newPage.close();
 
       return data;
     },
   );
 
-  return await Promise.all(invoiceDataPromises);
+  const invoiceData: unknown[] = [];
+
+  // Do the invoices in serial on the same page to avoid anti-blocking measures
+  // Keep using the same page for all the individual invoice data
+  for (const invoiceDataGetter of invoiceDataGetters) {
+    invoiceData.push(await invoiceDataGetter(page));
+  }
+
+  return invoiceData;
 }

@@ -1,6 +1,8 @@
 // import assert from 'node:assert';
 // import {chromium, devices} from 'playwright';
 
+import type {Page} from 'playwright';
+
 import {mkdirSync} from 'fs';
 
 import {playwrightAuthContextOptions} from './Auth';
@@ -13,11 +15,12 @@ import {
 
 const OUTPUT_DIR = 'output';
 
-const TIMEOUT_BETWEEN_ORDERS_MS = 30 * 1000;
+const TIMEOUT_BETWEEN_ORDERS_MS = 5 * 1000;
 
-const DEV_ONLY_ORDER_LIMIT = 3;
+const DEV_ONLY_ORDER_LIMIT = 5;
 
 (async () => {
+  // TODO: Target keeps making us login, so let's just authenticate on the same page/context/browser we'll be browsing in rather than recreating it
   // Set auth credentials
   await authenticateIfNeeded();
 
@@ -42,30 +45,32 @@ const DEV_ONLY_ORDER_LIMIT = 3;
     page,
   });
 
-  const orderInvoiceDataGetters = orderHistoryData.map((order) => async () => {
-    console.log(`Creating a new page for order ${order['order_number']}...`);
-    const newPage = await browser.newPage();
-    console.log('Getting all order invoice data...');
-    const invoicesData = await getTargetAPIOrderAllInvoiceData({
-      context,
-      orderNumber: order['order_number'],
-      page: newPage,
-    });
+  const orderInvoiceDataGetters = orderHistoryData.map(
+    (order) => async (pageForAllInvoiceData: Page) => {
+      console.log(`Creating a new page for order ${order['order_number']}...`);
+      // const newPage = await browser.newPage();
+      console.log('Getting all order invoice data...');
+      const invoicesData = await getTargetAPIOrderAllInvoiceData({
+        context,
+        orderNumber: order['order_number'],
+        page: pageForAllInvoiceData,
+      });
 
-    newPage.close();
+      // newPage.close();
 
-    const orderDateString = order['placed_date'];
+      const orderDateString = order['placed_date'];
 
-    return {
-      _orderDate:
-        orderDateString == null || orderDateString.length === 0
-          ? null
-          : new Date(orderDateString),
-      _orderNumber: order['order_number'],
-      invoicesData: invoicesData,
-      orderHistoryData: order,
-    };
-  });
+      return {
+        _orderDate:
+          orderDateString == null || orderDateString.length === 0
+            ? null
+            : new Date(orderDateString),
+        _orderNumber: order['order_number'],
+        invoicesData: invoicesData,
+        orderHistoryData: order,
+      };
+    },
+  );
 
   const allOrderData: Array<unknown> = [];
 
@@ -76,7 +81,7 @@ const DEV_ONLY_ORDER_LIMIT = 3;
     DEV_ONLY_ORDER_LIMIT,
   )) {
     console.log(`Getting order invoice data...`);
-    const orderData = await orderInvoiceDataGetter();
+    const orderData = await orderInvoiceDataGetter(page);
     console.log(
       `Got order invoice data for order ${
         orderData?.orderHistoryData?.order_number ?? 'NO_ORDER_NUMBER'
