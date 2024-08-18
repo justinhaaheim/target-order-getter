@@ -114,7 +114,10 @@ export async function getTargetAPIOrderHistoryData({
       url.host === TARGET_API_HOSTNAME &&
       url.pathname.endsWith('order_history')
     ) {
-      const responseJson = await getJSONNoThrow(response);
+      const responseJson = (await getJSONNoThrow(response)) as {
+        [key: string]: unknown;
+        request: {page_number: number; page_size: number};
+      };
 
       if (responseJson == null) {
         console.warn(
@@ -125,7 +128,7 @@ export async function getTargetAPIOrderHistoryData({
 
       const pageNumber = responseJson['request']?.['page_number'];
       const pageSize = responseJson['request']?.['page_size'];
-      const ordersArray = responseJson['orders'];
+      const ordersArray = responseJson['orders'] as unknown[];
 
       console.log(
         `Received order_history data for page number ${pageNumber} (page size: ${pageSize})`,
@@ -197,7 +200,10 @@ export async function getTargetAPIOrderInvoiceOverviewData({
       url.pathname.includes(`orders/${orderNumber}/invoices`)
     ) {
       console.log('INVOICE_OVERVIEW_RESPONSE', response.url());
-      const data = await getJSONNoThrow(response);
+      const data = (await getJSONNoThrow(response)) as {
+        [key: string]: unknown;
+        invoices: Array<{[key: string]: unknown}>;
+      };
       console.log('Received invoice data:', data);
 
       if (data == null) {

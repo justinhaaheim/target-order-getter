@@ -45,7 +45,8 @@ export async function getStoredAuthStateObject(
 export async function getStoredAuthStateSoonestExpiration(
   authFilePath: string,
 ): Promise<Date | null> {
-  const {data: authUserJson} = await getStoredAuthStateObject(authFilePath);
+  const {data} = await getStoredAuthStateObject(authFilePath);
+  const authUserJson = data as {[key: string]: unknown};
 
   if (authUserJson == null) {
     console.log('Auth file not found:', authFilePath);
@@ -106,7 +107,7 @@ export async function getStoredAuthStateCookieExpirationByCookieName(
   cookieName: string,
 ): Promise<{expiresDate: Date | null; fileExists: boolean}> {
   const authUserJsonResult = await getStoredAuthStateObject(authFilePath);
-  const {data: authUserJson} = authUserJsonResult;
+  const authUserJson = authUserJsonResult.data as {[key: string]: unknown};
 
   if (authUserJsonResult.fileExists === false) {
     console.log('Auth file not found:', authFilePath);
