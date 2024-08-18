@@ -4,9 +4,7 @@
 import {mkdirSync} from 'fs';
 
 import {playwrightAuthContextOptions} from './Auth';
-import {TARGET_ORDER_PAGE_URL} from './Constants';
 import {writeToJSONFileWithDateTime} from './Files';
-import {loadMoreOrdersUntilOrderCount} from './Helpers';
 import {authenticateIfNeeded, getNewBrowser} from './Setup';
 import {
   getTargetAPIOrderAllInvoiceData,
@@ -14,6 +12,10 @@ import {
 } from './TargetAPIData';
 
 const OUTPUT_DIR = 'output';
+
+const TIMEOUT_BETWEEN_ORDERS_MS = 30 * 1000;
+
+const DEV_ONLY_ORDER_LIMIT = 3;
 
 (async () => {
   // Set auth credentials
@@ -51,7 +53,15 @@ const OUTPUT_DIR = 'output';
     });
 
     newPage.close();
+
+    const orderDateString = order['placed_date'];
+
     return {
+      _orderDate:
+        orderDateString == null || orderDateString.length === 0
+          ? null
+          : new Date(orderDateString),
+      _orderNumber: order['order_number'],
       invoicesData: invoicesData,
       orderHistoryData: order,
     };
@@ -61,7 +71,10 @@ const OUTPUT_DIR = 'output';
 
   console.log('📋 Getting order invoice data for each order...');
   // Do these one at a time for now
-  for (const orderInvoiceDataGetter of orderInvoiceDataGetters) {
+  for (const orderInvoiceDataGetter of orderInvoiceDataGetters.slice(
+    0,
+    DEV_ONLY_ORDER_LIMIT,
+  )) {
     console.log(`Getting order invoice data...`);
     const orderData = await orderInvoiceDataGetter();
     console.log(
@@ -70,6 +83,7 @@ const OUTPUT_DIR = 'output';
       }...`,
     );
     allOrderData.push(orderData);
+    await page.waitForTimeout(TIMEOUT_BETWEEN_ORDERS_MS);
   }
 
   // Create the dir if it doesn't exist
@@ -80,6 +94,10 @@ const OUTPUT_DIR = 'output';
     data: allOrderData,
     name: `targetOrderInvoiceData-${orderCount}-orders`,
   });
+
+  console.log('Doing final timeout before closing browser context...');
+  await page.waitForTimeout(30 * 1000);
+  console.log('Closing browser context...');
 
   // Teardown
   await context.close();

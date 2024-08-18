@@ -1,9 +1,18 @@
-import type {Page} from 'playwright';
+import type {Page, Response} from 'playwright';
 
 type LoadMoreConfig = {
   orderCount: number;
   page: Page;
 };
+
+export async function getJSONNoThrow(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch (error) {
+    console.error('Error parsing JSON:', error);
+    return null;
+  }
+}
 
 async function getCurrentOrderCount(page: Page): Promise<number> {
   const orderLinksLocator = page.getByRole('link', {name: 'view order'});

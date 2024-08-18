@@ -32,5 +32,5 @@ playwright/.auth
 # From: https://git-scm.com/docs/gitignore/en
 # If there is a separator at the beginning or middle (or both) of the pattern, then the pattern is relative to the directory level of the particular .gitignore file itself. Otherwise the pattern may also match at any level below the .gitignore level.
 # If there is a separator at the end of the pattern then the pattern will only match directories, otherwise the pattern can match both files and directories.
-# So to ignore a directory one should use the directory name followed by a slash, so that it doesn't match files too.
-output/
+# So to ignore a directory one should use a slash (since we don't want to accidentally match any arbitrary subfolder named output), then the directory name followed by a slash, so that it doesn't match files too.
+/output/

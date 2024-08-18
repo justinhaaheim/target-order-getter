@@ -5,7 +5,7 @@
 import type {BrowserContext, Page, Response} from 'playwright';
 
 import {TARGET_API_HOSTNAME, TARGET_ORDER_PAGE_URL} from './Constants';
-import {loadMoreOrdersUntilOrderCount} from './Helpers';
+import {getJSONNoThrow, loadMoreOrdersUntilOrderCount} from './Helpers';
 
 export type TargetAPIOrderHistoryItem = {
   [key: string]: unknown;
@@ -97,17 +97,31 @@ export function isTargetInvoiceOverviewList(
   });
 }
 
+/**
+ * Order History: The list of a customers orders
+ */
 export async function getTargetAPIOrderHistoryData({
   orderCount,
   page,
 }: GetTargetAPIOrderHistoryConfig): Promise<TargetAPIOrderHistoryItem[]> {
   const orderResponsePages: Array<Array<unknown>> = [];
 
-  const onPageResponse = async (response) => {
+  const onPageResponse: ResponseListener = async (response: Response) => {
     // console.log('<<', response.status(), response.url());
 
-    if (response.url().includes('order_history')) {
-      const responseJson = await response.json();
+    const url = new URL(response.url());
+    if (
+      url.host === TARGET_API_HOSTNAME &&
+      url.pathname.endsWith('order_history')
+    ) {
+      const responseJson = await getJSONNoThrow(response);
+
+      if (responseJson == null) {
+        console.warn(
+          '[getTargetAPIOrderHistoryData] Response JSON is null. This should not happen',
+        );
+        return;
+      }
 
       const pageNumber = responseJson['request']?.['page_number'];
       const pageSize = responseJson['request']?.['page_size'];
@@ -139,7 +153,7 @@ export async function getTargetAPIOrderHistoryData({
 
   await page.goto(TARGET_ORDER_PAGE_URL);
 
-  // Load more orders
+  // Load more orders and capture the data that comes in
   await loadMoreOrdersUntilOrderCount({orderCount: orderCount, page});
 
   const orderData = orderResponsePages.flat();
@@ -159,7 +173,9 @@ export async function getTargetAPIOrderHistoryData({
   return orderData;
 }
 
-// Overview data is just the high level list of invoices, without specific details
+/**
+ * Invoice Overview Data: Overview data is just the high level list of invoices, without specific details
+ */
 export async function getTargetAPIOrderInvoiceOverviewData({
   orderNumber,
   page,
@@ -167,21 +183,29 @@ export async function getTargetAPIOrderInvoiceOverviewData({
   orderNumber: string;
   page: Page;
 }): Promise<TargetAPIInvoiceOverviewItem[]> {
+  // TODO: We can actually get this directly on the order details page. Not entirely sure it shows up on the invoices page (versus being server rendered)
   const invoiceOverviewURL = getTargetOrderInvoicesURL(orderNumber);
 
   const invoicesOverviewMap = new Map();
 
-  const onInvoicesResponse = async (response: Response) => {
+  const onInvoicesResponse: ResponseListener = async (response: Response) => {
     const url = new URL(response.url());
     if (
       url.host === TARGET_API_HOSTNAME &&
       url.pathname.includes(`orders/${orderNumber}/invoices`)
     ) {
       console.log('INVOICE_OVERVIEW_RESPONSE', response.url());
-      const data = await response.json();
+      const data = await getJSONNoThrow(response);
       console.log('Received invoice data:', data);
 
-      const invoices = data['invoices'];
+      if (data == null) {
+        console.warn(
+          '[getTargetAPIOrderInvoiceData] Invoice data is null. This should not happen',
+        );
+        return;
+      }
+
+      const invoices = data['invoices'] ?? [];
       invoices.forEach((invoice) => {
         const id = invoice['id'];
         if (id == null) {
@@ -201,7 +225,8 @@ export async function getTargetAPIOrderInvoiceOverviewData({
   await page.goto(invoiceOverviewURL);
 
   // Wait for at least one invoice link to appear
-  await page.getByRole('link', {name: 'View invoice'}).waitFor();
+  // NOTE: `.first()` is needed in strict mode in case this matches more than one link
+  await page.getByRole('link', {name: 'View invoice'}).first().waitFor();
 
   const invoiceOverviewList = Array.from(invoicesOverviewMap.values());
 
@@ -215,7 +240,9 @@ export async function getTargetAPIOrderInvoiceOverviewData({
   return invoiceOverviewList;
 }
 
-// Get details on a specific invoice
+/**
+ * Individual Invoice Data: The detailed data for a specific invoice
+ */
 export async function getTargetAPIOrderIndividualInvoiceData({
   orderNumber,
   invoiceNumber,
@@ -232,11 +259,31 @@ export async function getTargetAPIOrderIndividualInvoiceData({
 
   let invoiceData: unknown = null;
 
-  const onInvoiceResponse = async (response) => {
+  const onInvoiceResponse: ResponseListener = async (response: Response) => {
     // Target's API mirrors the web navigation structure, so we can just use the path here to identify responses from the invoice API
-    if (response.url().includes(invoicePath)) {
-      const data = await response.json();
+    const url = new URL(response.url());
+    if (
+      url.host === TARGET_API_HOSTNAME &&
+      url.pathname.includes(invoicePath)
+    ) {
+      const data = await getJSONNoThrow(response);
       console.log('Received invoice data:', data);
+
+      if (data == null) {
+        console.warn(
+          '[getTargetAPIOrderIndividualInvoiceData] Invoice data is null. This should not happen',
+        );
+        return;
+      }
+
+      if (invoiceData != null) {
+        console.warn(
+          '[getTargetAPIOrderIndividualInvoiceData] invoiceData has existing data. Ignoring new data',
+          data,
+        );
+        return;
+      }
+
       invoiceData = data;
     }
   };
@@ -257,6 +304,9 @@ export async function getTargetAPIOrderIndividualInvoiceData({
   return invoiceData;
 }
 
+/**
+ * All Invoice Data: Gets all the invoice data for a given orderNumber
+ */
 export async function getTargetAPIOrderAllInvoiceData({
   orderNumber,
   page,
