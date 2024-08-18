@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "engineStrict": true,
+  "engines": {
+    "node": ">=20.11.0"
+  },
   "scripts": {
     "build": "tsc && vite build",
     "clean:build": "rm -rf build/",
@@ -27,12 +31,13 @@
     "@fontsource/roboto": "^5.0.8",
     "@mui/icons-material": "^5.14.11",
     "@mui/material": "^5.14.11",
+    "dayjs": "1.11.12",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tsx": "4.17.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.46.0",
+    "@playwright/test": "1.46.1",
     "@types/node": "^22.1.0",
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
