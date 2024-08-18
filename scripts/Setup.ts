@@ -129,8 +129,8 @@ export async function getNewBrowser(config: GetNewBrowserConfig): Promise<{
   const {browserContextOptions} = config ?? {};
 
   const browser = await chromium.launch({
-    channel: 'chrome',
-    headless: false, // For branded chrome browser
+    channel: 'chrome', // For branded chrome browser
+    headless: false,
   });
   const context = await browser.newContext({
     ...devices['Desktop Chrome'],

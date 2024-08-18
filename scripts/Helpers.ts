@@ -11,7 +11,9 @@ async function getCurrentOrderCount(page: Page): Promise<number> {
   return orderLinksLocatorArray.length;
 }
 
-// I could also maybe just listen for the order_history response and count the orders that way.
+/**
+ * NOTE: this assumes we're already on the target order page
+ */
 export async function loadMoreOrdersUntilOrderCount({
   page,
   orderCount,
@@ -36,11 +38,11 @@ export async function loadMoreOrdersUntilOrderCount({
     const orderLinksLocator = page.getByRole('link', {name: 'view order'});
     await orderLinksLocator.nth(currentOrderCount + 1).waitFor();
 
-    const tmpOrderCountAfterWaitingForNthElement =
+    const orderCountAfterWaitingForNthElement =
       await getCurrentOrderCount(page);
     console.log(
       'Order count after waiting for nth element:',
-      tmpOrderCountAfterWaitingForNthElement,
+      orderCountAfterWaitingForNthElement,
     );
 
     // await page.waitForTimeout(5000);
@@ -49,7 +51,7 @@ export async function loadMoreOrdersUntilOrderCount({
 
     // currentOrderCount = tmpOrderCountAfterTimeout;
 
-    currentOrderCount = tmpOrderCountAfterWaitingForNthElement;
+    currentOrderCount = orderCountAfterWaitingForNthElement;
   }
 
   console.log(`Finished loading ${currentOrderCount} orders`);
