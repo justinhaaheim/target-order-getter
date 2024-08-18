@@ -8,15 +8,12 @@
     "node": ">=20.11.0"
   },
   "scripts": {
-    "build": "tsc && vite build",
     "clean:build": "rm -rf build/",
     "clean:node-modules": "rm -rf node_modules/",
-    "dev": "vite",
     "lint:fix": "npm run lint --fix",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "prettier-check": "prettier --check .",
     "prettier": "prettier --write .",
-    "preview": "vite preview",
     "signal:serial": "npm run ts-check && npm run lint && npm run prettier-check",
     "signal": "concurrently --names \"TS,LINT,PRETTIER\" -c \"bgBlack.bold,bgRed.bold,bgCyan.bold\" \"npm run ts-check\" \"npm run lint\" \"npm run prettier-check\"",
     "ts-check": "tsc --noEmit",
@@ -26,24 +23,15 @@
     "prepare": "husky install"
   },
   "dependencies": {
-    "@emotion/react": "^11.11.1",
-    "@emotion/styled": "^11.11.0",
-    "@fontsource/roboto": "^5.0.8",
-    "@mui/icons-material": "^5.14.11",
-    "@mui/material": "^5.14.11",
     "dayjs": "1.11.12",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "tsx": "4.17.0"
+    "tsx": "4.17.0",
+    "@playwright/test": "1.46.1",
+    "playwright": "1.46.1"
   },
   "devDependencies": {
-    "@playwright/test": "1.46.1",
     "@types/node": "^22.1.0",
-    "@types/react": "^18.2.15",
-    "@types/react-dom": "^18.2.7",
     "@typescript-eslint/eslint-plugin": "5.62.0",
     "@typescript-eslint/parser": "5.62.0",
-    "@vitejs/plugin-react": "^4.0.3",
     "concurrently": "8.2.1",
     "eslint": "^8.45.0",
     "eslint-config-prettier": "9.0.0",
@@ -57,10 +45,8 @@
     "eslint-plugin-typescript-sort-keys": "2.3.0",
     "husky": "^8.0.3",
     "lint-staged": "^14.0.1",
-    "playwright": "1.46.1",
     "prettier": "3.0.3",
-    "typescript": "^5.0.2",
-    "vite": "^4.4.5"
+    "typescript": "^5.0.2"
   },
   "lint-staged": {
     "**/*": "prettier --check --ignore-unknown",
