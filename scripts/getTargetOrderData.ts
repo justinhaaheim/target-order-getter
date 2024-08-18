@@ -15,9 +15,9 @@ import {
 
 const OUTPUT_DIR = 'output';
 
-const TIMEOUT_BETWEEN_ORDERS_MS = 5 * 1000;
+const TIMEOUT_BETWEEN_ORDERS_MS = 1 * 1000;
 
-const DEV_ONLY_ORDER_LIMIT = 5;
+// const DEV_ONLY_ORDER_LIMIT = 5;
 
 (async () => {
   // TODO: Target keeps making us login, so let's just authenticate on the same page/context/browser we'll be browsing in rather than recreating it
@@ -46,7 +46,7 @@ const DEV_ONLY_ORDER_LIMIT = 5;
   });
 
   const orderInvoiceDataGetters = orderHistoryData.map(
-    (order) => async (pageForAllInvoiceData: Page) => {
+    (order, index) => async (pageForAllInvoiceData: Page) => {
       console.log(`Creating a new page for order ${order['order_number']}...`);
       // const newPage = await browser.newPage();
       console.log('Getting all order invoice data...');
@@ -61,6 +61,7 @@ const DEV_ONLY_ORDER_LIMIT = 5;
       const orderDateString = order['placed_date'];
 
       return {
+        __orderIndex: index,
         _orderDate:
           orderDateString == null || orderDateString.length === 0
             ? null
@@ -76,10 +77,7 @@ const DEV_ONLY_ORDER_LIMIT = 5;
 
   console.log('📋 Getting order invoice data for each order...');
   // Do these one at a time for now
-  for (const orderInvoiceDataGetter of orderInvoiceDataGetters.slice(
-    0,
-    DEV_ONLY_ORDER_LIMIT,
-  )) {
+  for (const orderInvoiceDataGetter of orderInvoiceDataGetters) {
     console.log(`Getting order invoice data...`);
     const orderData = await orderInvoiceDataGetter(page);
     console.log(
