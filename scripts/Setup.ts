@@ -7,14 +7,8 @@ import type {
 
 import {chromium, devices} from 'playwright';
 
-import {
-  getIsAuthFileCookieStillValid,
-  playwrightAuthContextOptions,
-  playwrightAuthFilePath,
-} from './Auth';
-
-// Should only be viewable when logged in
-const TARGET_ORDER_PAGE_URL = 'https://www.target.com/orders';
+import {getIsAuthFileCookieStillValid, playwrightAuthFilePath} from './Auth';
+import {TARGET_ORDER_PAGE_URL} from './Constants';
 
 type GetNewBrowserConfig = {
   browserContextOptions?: BrowserContextOptions;
@@ -31,6 +25,7 @@ export async function canNavigateToURL(
   let canNavigateToURL = false;
   const currentUrl = page.url();
 
+  // TODO: use page.waitForURL with a glob pattern instead of this simple check
   // TODO: We probably want something less brittle/more robust here than just the simple startsWith check.
   if (currentUrl.startsWith(url)) {
     canNavigateToURL = true;
@@ -57,18 +52,20 @@ export async function authenticateIfNeeded(): Promise<void> {
 
   if (isAuthCookieValid) {
     console.log('✅ Auth file is still valid.');
+    return;
 
-    const canNavigate = await canNavigateToURL(TARGET_ORDER_PAGE_URL, {
-      browserContextOptions: playwrightAuthContextOptions,
-    });
+    // TODO: Decide whether to keep this logic. Maybe try and reuse the page?
+    // const canNavigate = await canNavigateToURL(TARGET_ORDER_PAGE_URL, {
+    //   browserContextOptions: playwrightAuthContextOptions,
+    // });
 
-    if (canNavigate) {
-      console.log('✅ Successfully navigated to:', TARGET_ORDER_PAGE_URL);
-      return;
-    }
-    console.warn(
-      `🚫 Failed to navigate to ${TARGET_ORDER_PAGE_URL} even though auth cookies appear to be valid. Attempting to reauthenticate...`,
-    );
+    // if (canNavigate) {
+    //   console.log('✅ Successfully navigated to:', TARGET_ORDER_PAGE_URL);
+    //   return;
+    // }
+    // console.warn(
+    //   `🚫 Failed to navigate to ${TARGET_ORDER_PAGE_URL} even though auth cookies appear to be valid. Attempting to reauthenticate...`,
+    // );
   }
   console.log('🚫 Auth file is expired. Re-authenticating...');
   await authenticateAndStoreState({authFile: playwrightAuthFilePath});
@@ -101,7 +98,7 @@ export async function authenticateAndStoreState({
   // await page.waitForTimeout(60 * 1000);
 
   // Perform authentication steps. Replace these actions with your own.
-  await page.goto('https://www.target.com/orders');
+  await page.goto(TARGET_ORDER_PAGE_URL);
 
   // await page.getByLabel('Username or email address').fill('username');
   // await page.getByLabel('Password').fill('password');
@@ -110,7 +107,7 @@ export async function authenticateAndStoreState({
   //
   // Sometimes login flow sets cookies in the process of several redirects.
   // Wait for the final URL to ensure that the cookies are actually set.
-  await page.waitForURL('https://www.target.com/orders**');
+  await page.waitForURL(`${TARGET_ORDER_PAGE_URL}**`);
 
   // Alternatively, you can wait until the page reaches a state where all cookies are set.
   // await expect(page.getByRole('button', {name: 'Hi, Justin'})).toBeVisible({
