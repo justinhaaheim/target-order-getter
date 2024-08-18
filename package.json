@@ -17,6 +17,7 @@
     "signal:serial": "npm run ts-check && npm run lint && npm run prettier-check",
     "signal": "concurrently --names \"TS,LINT,PRETTIER\" -c \"bgBlack.bold,bgRed.bold,bgCyan.bold\" \"npm run ts-check\" \"npm run lint\" \"npm run prettier-check\"",
     "ts-check": "tsc --noEmit",
+    "tsc": "tsc --noEmit",
     "ts-check-masked": "npm run ts-check",
     "login": "op run --env-file .env.local -- playwright test",
     "test": "playwright test",
