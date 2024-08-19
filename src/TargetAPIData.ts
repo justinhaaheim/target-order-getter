@@ -280,7 +280,7 @@ export async function getTargetAPIOrderInvoiceOverviewData({
 
   if (invoicesOverviewMap.size === 0 && gotResponseButNoInvoicesAvailable) {
     console.warn(
-      '[getTargetAPIOrderInvoiceOverviewData] Target API reports no invoices available. This can happen when an order was cancelled without any charges/refunds.',
+      '[getTargetAPIOrderInvoiceOverviewData] Target API reports no invoices available.',
     );
     return [];
   }

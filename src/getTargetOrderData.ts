@@ -6,7 +6,7 @@ import type {Page, Request, Response} from 'playwright';
 import {mkdirSync} from 'fs';
 import {v4 as uuidv4} from 'uuid';
 
-import {playwrightAuthContextOptions} from './Auth';
+import {playwrightAuthContextOptions, playwrightAuthFilePath} from './Auth';
 import {TARGET_ORDER_PAGE_URL} from './Constants';
 import {writeToJSONFileWithDateTime} from './Files';
 import {getNewBrowser} from './Setup';
@@ -120,7 +120,7 @@ type ActionQueueItem = {
           _orderDate:
             orderDateString == null || orderDateString.length === 0
               ? null
-              : new Date(orderDateString),
+              : new Date(orderDateString).valueOf(),
           _orderNumber: order['order_number'],
           invoicesData: invoicesData,
           orderHistoryData: order,
@@ -185,7 +185,7 @@ type ActionQueueItem = {
   mkdirSync(OUTPUT_DIR, {recursive: true});
 
   const outputData = {
-    _createdTimestamp: new Date(),
+    _createdTimestamp: new Date().valueOf(),
     _params: {orderCount},
     invoiceAndOrderData: allOrderData,
     orderHistoryData,
@@ -200,6 +200,11 @@ type ActionQueueItem = {
   console.log('Doing final timeout before closing browser context...');
   await mainPage.waitForTimeout(30 * 1000);
   console.log('Closing browser context...');
+
+  // Save the cookies to the auth file, assuming that's better than resetting from a previous state
+  await mainPage.context().storageState({
+    path: playwrightAuthFilePath,
+  });
 
   // Teardown
   await context.close();
