@@ -76,6 +76,8 @@ module.exports = {
         // (This helps configure simple-import-sort) Make sure all imports are at the top of the file
         'import/first': ERROR,
 
+        'no-unused-vars': OFF,
+
         'simple-import-sort/imports': [
           ERROR,
           {
