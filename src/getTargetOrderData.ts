@@ -7,6 +7,7 @@ import {mkdirSync} from 'fs';
 import {v4 as uuidv4} from 'uuid';
 
 import {playwrightAuthContextOptions} from './Auth';
+import {TARGET_ORDER_PAGE_URL} from './Constants';
 import {writeToJSONFileWithDateTime} from './Files';
 import {getNewBrowser} from './Setup';
 import {
@@ -17,6 +18,8 @@ import {
 const OUTPUT_DIR = 'output';
 
 const TIMEOUT_BETWEEN_ORDERS_MS = 0.5 * 1000;
+
+const TIMEOUT_FOR_INITIAL_AUTHENTICATION = 120 * 1000;
 
 function shouldLogRequestResponse(urlString: string) {
   const url = new URL(urlString);
@@ -73,7 +76,14 @@ type ActionQueueItem = {
       console.debug('<<', response.status(), response.url()),
   );
 
-  const orderCount = 20;
+  // Try navigating to the target order page. If we need to authenticate we'll have a timeout in which to complete that, after which we should be redirected to the order page
+  await mainPage.goto(TARGET_ORDER_PAGE_URL);
+  await mainPage.waitForURL(`${TARGET_ORDER_PAGE_URL}**`, {
+    timeout: TIMEOUT_FOR_INITIAL_AUTHENTICATION,
+  });
+  // TODO:
+
+  const orderCount = 10;
 
   console.log('📋 Getting order history data...');
   const orderHistoryData = await getTargetAPIOrderHistoryData({

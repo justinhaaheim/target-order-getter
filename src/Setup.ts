@@ -22,13 +22,13 @@ export async function canNavigateToURL(
 
   await page.goto(url);
 
-  let canNavigateToURL = false;
+  let canNavigateToURLBool = false;
   const currentUrl = page.url();
 
   // TODO: use page.waitForURL with a glob pattern instead of this simple check
   // TODO: We probably want something less brittle/more robust here than just the simple startsWith check.
   if (currentUrl.startsWith(url)) {
-    canNavigateToURL = true;
+    canNavigateToURLBool = true;
     console.log(`✅ Successfully navigated to: ${currentUrl}`, {
       currentUrl,
       url,
@@ -40,7 +40,7 @@ export async function canNavigateToURL(
   await context.close();
   await browser.close();
 
-  return canNavigateToURL;
+  return canNavigateToURLBool;
 }
 
 export async function authenticateIfNeeded(): Promise<void> {

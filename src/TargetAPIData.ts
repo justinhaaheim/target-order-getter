@@ -249,14 +249,34 @@ export async function getTargetAPIOrderInvoiceOverviewData({
     }
   };
 
-  page.on('response', onInvoicesResponse);
+  // page.on('response', onInvoicesResponse);
+  const responsePromise = page.waitForResponse((response) => {
+    const isMatchingURL = isTargetAPIOrderInvoiceOverviewURL(
+      response,
+      orderNumber,
+    );
+    console.log(
+      '[getTargetAPIOrderInvoiceOverviewData] Response received in waitForResponse. Matches?',
+      isMatchingURL,
+    );
+    return isMatchingURL;
+  });
 
   // TODO: Is pagination ever needed for a large number of invoices?
   await page.goto(invoiceOverviewURL);
 
-  await page.waitForResponse((response) =>
-    isTargetAPIOrderInvoiceOverviewURL(response, orderNumber),
-  );
+  await responsePromise;
+  await onInvoicesResponse(await responsePromise);
+
+  console.log('OK, weve now awaited the response and can move on.');
+
+  // page.off('response', onInvoicesResponse);
+
+  console.log('About to check if we can return early:', {
+    gotResponseButNoInvoicesAvailable,
+    invoicesMapSize: invoicesOverviewMap.size,
+    invoicesOverviewMap,
+  });
 
   if (invoicesOverviewMap.size === 0 && gotResponseButNoInvoicesAvailable) {
     console.warn(
@@ -336,6 +356,8 @@ export async function getTargetAPIOrderIndividualInvoiceData({
 
   // Wait for the invoice number to be populated in the UI
   await page.getByText(/Invoice number: \d+/i).waitFor();
+
+  page.off('response', onInvoiceResponse);
 
   if (invoiceData == null) {
     throw new Error(
