@@ -24,10 +24,11 @@
     "prepare": "husky install"
   },
   "dependencies": {
-    "dayjs": "1.11.12",
-    "tsx": "4.17.0",
     "@playwright/test": "1.46.1",
-    "playwright": "1.46.1"
+    "crawlee": "3.11.1",
+    "dayjs": "1.11.12",
+    "playwright": "1.46.1",
+    "tsx": "4.17.0"
   },
   "devDependencies": {
     "@types/node": "^22.1.0",

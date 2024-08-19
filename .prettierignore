@@ -27,3 +27,5 @@ coverage
 
 /output/
 /playwright/
+
+/storage/
