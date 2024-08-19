@@ -27,6 +27,7 @@
     "@playwright/test": "1.46.1",
     "@types/uuid": "10.0.0",
     "dayjs": "1.11.12",
+    "node-fetch": "3.3.2",
     "playwright": "1.46.1",
     "tsx": "4.17.0",
     "uuid": "10.0.0"
