@@ -7,6 +7,8 @@ import type {BrowserContext, Page, Response} from 'playwright';
 import {TARGET_API_HOSTNAME, TARGET_ORDER_PAGE_URL} from './Constants';
 import {getJSONNoThrow, loadMoreOrdersUntilOrderCount} from './Helpers';
 
+const TARGET_RESOURCE_NOT_FOUND_CODE = 102;
+
 export type TargetAPIOrderHistoryItem = {
   [key: string]: unknown;
   order_number: string;
@@ -178,6 +180,20 @@ export async function getTargetAPIOrderHistoryData({
   return orderData;
 }
 
+function isTargetAPIOrderInvoiceOverviewURL(
+  response: Response,
+  orderNumber: string,
+): boolean {
+  const url = new URL(response.url());
+  if (
+    url.host === TARGET_API_HOSTNAME &&
+    url.pathname.includes(`orders/${orderNumber}/invoices`)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Invoice Overview Data: Overview data is just the high level list of invoices, without specific details
  */
@@ -192,13 +208,10 @@ export async function getTargetAPIOrderInvoiceOverviewData({
   const invoiceOverviewURL = getTargetOrderInvoicesURL(orderNumber);
 
   const invoicesOverviewMap = new Map();
+  let gotResponseButNoInvoicesAvailable = false;
 
   const onInvoicesResponse: ResponseListener = async (response: Response) => {
-    const url = new URL(response.url());
-    if (
-      url.host === TARGET_API_HOSTNAME &&
-      url.pathname.includes(`orders/${orderNumber}/invoices`)
-    ) {
+    if (isTargetAPIOrderInvoiceOverviewURL(response, orderNumber)) {
       console.log('INVOICE_OVERVIEW_RESPONSE', response.url());
       const data = (await getJSONNoThrow(response)) as {
         [key: string]: unknown;
@@ -208,8 +221,17 @@ export async function getTargetAPIOrderInvoiceOverviewData({
 
       if (data == null) {
         console.warn(
-          '[getTargetAPIOrderInvoiceData] Invoice data is null. This should not happen',
+          '[getTargetAPIOrderInvoiceOverviewData] Invoice data is null. This should not happen',
         );
+        return;
+      }
+
+      if (data['code'] === TARGET_RESOURCE_NOT_FOUND_CODE) {
+        console.log(
+          '[getTargetAPIOrderInvoiceOverviewData] Target API reports resource not found. This can happen when an order was cancelled without any charges/refunds.',
+          data,
+        );
+        gotResponseButNoInvoicesAvailable = true;
         return;
       }
 
@@ -218,7 +240,7 @@ export async function getTargetAPIOrderInvoiceOverviewData({
         const id = invoice['id'];
         if (id == null) {
           console.warn(
-            '[getTargetAPIOrderInvoiceData] Invoice ID is null. This should not happen',
+            '[getTargetAPIOrderInvoiceOverviewData] Invoice ID is null. This should not happen',
             invoice,
           );
         }
@@ -232,6 +254,18 @@ export async function getTargetAPIOrderInvoiceOverviewData({
   // TODO: Is pagination ever needed for a large number of invoices?
   await page.goto(invoiceOverviewURL);
 
+  await page.waitForResponse((response) =>
+    isTargetAPIOrderInvoiceOverviewURL(response, orderNumber),
+  );
+
+  if (invoicesOverviewMap.size === 0 && gotResponseButNoInvoicesAvailable) {
+    console.warn(
+      '[getTargetAPIOrderInvoiceOverviewData] Target API reports no invoices available. This can happen when an order was cancelled without any charges/refunds.',
+    );
+    return [];
+  }
+
+  // TODO: We probably don't need to wait for this anymore, since all the data we need should come in one api response
   // Wait for at least one invoice link to appear
   // NOTE: `.first()` is needed in strict mode in case this matches more than one link
   await page.getByRole('link', {name: 'View invoice'}).first().waitFor();
@@ -239,7 +273,7 @@ export async function getTargetAPIOrderInvoiceOverviewData({
   const invoiceOverviewList = Array.from(invoicesOverviewMap.values());
 
   if (invoiceOverviewList.length === 0) {
-    throw new Error('[getTargetAPIOrderInvoiceData] No invoices found');
+    throw new Error('[getTargetAPIOrderInvoiceOverviewData] No invoices found');
   }
 
   if (!isTargetInvoiceOverviewList(invoiceOverviewList)) {

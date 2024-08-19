@@ -16,7 +16,7 @@ import {
 
 const OUTPUT_DIR = 'output';
 
-const TIMEOUT_BETWEEN_ORDERS_MS = 1 * 1000;
+const TIMEOUT_BETWEEN_ORDERS_MS = 0.5 * 1000;
 
 function shouldLogRequestResponse(urlString: string) {
   const url = new URL(urlString);
