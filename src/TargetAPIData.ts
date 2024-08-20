@@ -117,57 +117,7 @@ export async function getTargetAPIOrderHistoryData({
   orderCount,
   page,
 }: GetTargetAPIOrderHistoryConfig): Promise<TargetAPIOrderHistoryItem[]> {
-  // const orderResponsePages: Array<Array<unknown>> = [];
-
-  // const onPageResponse: ResponseListener = async (response: Response) => {
-  //   // console.log('<<', response.status(), response.url());
-
-  //   const url = new URL(response.url());
-  //   if (
-  //     url.host === TARGET_API_HOSTNAME &&
-  //     url.pathname.endsWith('order_history')
-  //   ) {
-  //     const responseJson = (await getJSONNoThrow(response)) as {
-  //       [key: string]: unknown;
-  //       request: {page_number: number; page_size: number};
-  //     };
-
-  //     if (responseJson == null) {
-  //       console.warn(
-  //         '[getTargetAPIOrderHistoryData] Response JSON is null. This should not happen',
-  //       );
-  //       return;
-  //     }
-
-  //     const pageNumber = responseJson['request']?.['page_number'];
-  //     const pageSize = responseJson['request']?.['page_size'];
-  //     const ordersArray = responseJson['orders'] as unknown[];
-
-  //     console.log(
-  //       `Received order_history data for page number ${pageNumber} (page size: ${pageSize})`,
-  //     );
-
-  //     if (typeof pageNumber !== 'number' || typeof pageSize !== 'number') {
-  //       throw new Error('Page number or page size is not a number');
-  //     }
-
-  //     if (orderResponsePages[pageNumber] != null) {
-  //       console.log(
-  //         `Overwriting existing order data for page number ${pageNumber}`,
-  //         {
-  //           ordersArray,
-  //           pageNumber,
-  //           pageSize,
-  //         },
-  //       );
-  //     }
-  //     orderResponsePages[pageNumber] = ordersArray;
-  //   }
-  // };
-
-  // page.on('response', onPageResponse);
-
-  console.log('Order count:', orderCount);
+  console.log('[getTargetAPIOrderHistoryData] Order count:', orderCount);
 
   const responsePromise = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -199,6 +149,7 @@ export async function getTargetAPIOrderHistoryData({
   const pagesRequiredForOrderCount = Math.ceil(orderCount / initialPageSize);
   const pageNumbersToFetch = range(1, pagesRequiredForOrderCount + 1);
 
+  // TODO: add these to a queue and limit how many are sent all at once
   const pages = await Promise.all(
     pageNumbersToFetch.map(async (pageNumberToFetch) => {
       console.log(

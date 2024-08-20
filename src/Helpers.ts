@@ -5,6 +5,16 @@ type LoadMoreConfig = {
   page: Page;
 };
 
+export type FetchConfig = {
+  requestInit: RequestInit;
+  url: URL;
+};
+
+export type FetchConfigWithResponse = FetchConfig & {
+  apiResponse: PlaywrightResponse;
+  browserURLResponse: PlaywrightResponse | null;
+};
+
 export async function getJSONNoThrow(
   response: PlaywrightResponse | Response,
 ): Promise<unknown> {
@@ -22,32 +32,95 @@ async function getCurrentOrderCount(page: Page): Promise<number> {
   return orderLinksLocatorArray.length;
 }
 
+/**
+ *
+ * @param param0
+ * @returns the fetch config used to make an endpoint request when loading browserURL
+ */
+export async function getFetchConfig({
+  browserURL,
+  page,
+  endpointURLToWatch,
+}: {
+  browserURL: string;
+  endpointURLToWatch: string;
+  page: Page;
+}): Promise<FetchConfigWithResponse> {
+  console.log('🕵🏽 Getting fetch config for endpoint:', endpointURLToWatch);
+
+  const endpointURLToWatchObject = new URL(endpointURLToWatch);
+
+  // Don't await here -- we want to add the listener now before we navigate to the page, and await later
+  const apiResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    console.debug(
+      `[getFetchConfig] Response received from ${url}:`,
+      response.status(),
+    );
+
+    // NOTE: We may want to rethink how precisely we are/are not matching the endpoint url. Should it just be a strict url.startsWith(endpointURLToWatch) check?
+    return (
+      url.host === endpointURLToWatchObject.host &&
+      url.pathname === endpointURLToWatchObject.pathname
+    );
+  });
+
+  // TODO: Add optional referrer url
+  const browserURLResponse = await page.goto(browserURL);
+
+  const apiResponse = await apiResponsePromise;
+
+  if (!apiResponse.ok()) {
+    throw new Error(
+      `[getFetchConfig] Response from endpoint is not OK. Endpoint: ${endpointURLToWatch}. Response status: ${apiResponse.status()}`,
+    );
+  }
+
+  const fetchConfig = await extractFetchConfigFromRequest(
+    apiResponse.request(),
+  );
+  return {...fetchConfig, apiResponse, browserURLResponse};
+}
+
 export async function extractFetchConfigFromRequest(
   request: Request,
-): Promise<{requestInit: RequestInit; url: URL}> {
+): Promise<FetchConfig> {
   const url = new URL(request.url());
   const headers = await request.allHeaders();
+  console.debug('[extractFetchConfigFromRequest] all headers:', headers);
+  console.debug(
+    '[extractFetchConfigFromRequest] all headers array:',
+    await request.headersArray(),
+  );
 
   const newHeaders: HeadersInit = {};
   for (const [key, value] of Object.entries(headers)) {
+    // Skip HTTP/2 pseudo-headers
     if (!key.startsWith(':')) {
       newHeaders[key] = value;
+    } else {
+      console.debug(
+        '[extractFetchConfigFromRequest] Skipping pseudo-header:',
+        key,
+      );
     }
   }
 
-  // const referrer = await request.;
-  // fetch(url, {
-  //   body: null,
-  //   headers: headers,
-  //   // credentials: 'include',
-  //   method: 'GET',
-  //   // mode: 'cors',
-  //   referrer: 'https://www.target.com/orders',
-  //   referrerPolicy: 'no-referrer-when-downgrade',
-  // });
+  const requestMethod = request.method();
+
+  // TODO: Possibly support other methods?
+  if (requestMethod !== 'GET') {
+    throw new Error(
+      `[extractFetchConfigFromRequest] Unsupported request method: ${requestMethod}`,
+    );
+  }
 
   const fetchConfig = {
-    requestInit: {body: null, headers: newHeaders, method: 'GET'},
+    requestInit: {
+      // body: null, // Let's not specify the body at all
+      headers: newHeaders,
+      method: requestMethod,
+    },
     url,
   };
   console.log('[extractFetchConfigFromRequest] fetchConfig:', fetchConfig);
