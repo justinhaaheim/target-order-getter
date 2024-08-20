@@ -1,4 +1,6 @@
-import type {Page, Response} from 'playwright';
+import type {Page, Request, Response} from 'playwright';
+
+import fetch from 'node-fetch';
 
 type LoadMoreConfig = {
   orderCount: number;
@@ -18,6 +20,27 @@ async function getCurrentOrderCount(page: Page): Promise<number> {
   const orderLinksLocator = page.getByRole('link', {name: 'view order'});
   const orderLinksLocatorArray = await orderLinksLocator.all();
   return orderLinksLocatorArray.length;
+}
+
+export async function extractFetchConfigFromRequest(
+  request: Request,
+): Promise<{requestInit: RequestInit; url: URL}> {
+  const url = new URL(request.url());
+  const headers = await request.allHeaders();
+  // const referrer = await request.;
+  // fetch(url, {
+  //   body: null,
+  //   headers: headers,
+  //   // credentials: 'include',
+  //   method: 'GET',
+  //   // mode: 'cors',
+  //   referrer: 'https://www.target.com/orders',
+  //   referrerPolicy: 'no-referrer-when-downgrade',
+  // });
+
+  const fetchConfig = {requestInit: {body: null, headers, method: 'GET'}, url};
+  console.log('[extractFetchConfigFromRequest] fetchConfig:', fetchConfig);
+  return fetchConfig;
 }
 
 /**

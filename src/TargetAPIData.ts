@@ -4,8 +4,18 @@
 
 import type {BrowserContext, Page, Response} from 'playwright';
 
-import {TARGET_API_HOSTNAME, TARGET_ORDER_PAGE_URL} from './Constants';
-import {getJSONNoThrow, loadMoreOrdersUntilOrderCount} from './Helpers';
+import fetch from 'node-fetch';
+
+import {
+  TARGET_API_HOSTNAME,
+  TARGET_API_ORDER_HISTORY_ENDPOINT_PATHNAME,
+  TARGET_ORDER_PAGE_URL,
+} from './Constants';
+import {
+  extractFetchConfigFromRequest,
+  getJSONNoThrow,
+  loadMoreOrdersUntilOrderCount,
+} from './Helpers';
 
 const TARGET_RESOURCE_NOT_FOUND_CODE = 102;
 
@@ -156,7 +166,28 @@ export async function getTargetAPIOrderHistoryData({
 
   page.on('response', onPageResponse);
 
+  const responsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    console.log(`Response received from ${url}:`, response.status());
+    return (
+      url.host === TARGET_API_HOSTNAME &&
+      url.pathname.startsWith(TARGET_API_ORDER_HISTORY_ENDPOINT_PATHNAME)
+    );
+  });
+
   await page.goto(TARGET_ORDER_PAGE_URL);
+
+  const response = await responsePromise;
+
+  const {url, requestInit} = await extractFetchConfigFromRequest(
+    response.request(),
+  );
+
+  console.log('Trying to hit the API directly now...');
+  const newUrl = new URL(url);
+  newUrl.searchParams.set('page_number', '2');
+
+  const newResponse = await fetch(newUrl, requestInit);
 
   // Load more orders and capture the data that comes in
   await loadMoreOrdersUntilOrderCount({orderCount: orderCount, page});

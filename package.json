@@ -8,6 +8,7 @@
     "node": ">=20.11.0"
   },
   "scripts": {
+    "dev": "tsx src/getTargetOrderData.ts",
     "clean:build": "rm -rf build/",
     "clean:node-modules": "rm -rf node_modules/",
     "lint:fix": "npm run lint --fix",

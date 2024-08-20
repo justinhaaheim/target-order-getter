@@ -24,6 +24,8 @@ const TIMEOUT_BETWEEN_ORDERS_MS = 0.5 * 1000;
 
 const TIMEOUT_FOR_INITIAL_AUTHENTICATION = 120 * 1000;
 
+const GET_INVOICE_DATA = false;
+
 const RETRY_ATTEMPTS_LIMIT = 3;
 
 function shouldLogRequestResponse(urlString: string) {
@@ -96,7 +98,10 @@ type OutputData = {
   });
   // TODO:
 
-  const orderCount = 10;
+  /**
+   * Get the order history data
+   */
+  const orderCount = 20;
 
   console.log('📋 Getting order history data...');
   const orderHistoryData = await getTargetAPIOrderHistoryData({
@@ -129,118 +134,123 @@ type OutputData = {
     timestamp: outputTimestamp,
   });
 
-  /**
-   * Get all invoice data for each order
-   */
-  const orderInvoiceActionQueue: ActionQueueItem[] = orderHistoryData.map(
-    (order, index) => ({
-      action: async ({page: pageForAllInvoiceData}) => {
-        console.log(
-          `Creating a new page for order ${order['order_number']}...`,
-        );
-        // const newPage = await browser.newPage();
-        console.log('Getting all order invoice data...');
-        const invoicesData = await getTargetAPIOrderAllInvoiceData({
-          context,
-          orderNumber: order['order_number'],
-          page: pageForAllInvoiceData,
-        });
+  if (GET_INVOICE_DATA) {
+    console.log('📋 Getting invoice data...');
+    /**
+     * Get all invoice data for each order
+     */
+    const orderInvoiceActionQueue: ActionQueueItem[] = orderHistoryData.map(
+      (order, index) => ({
+        action: async ({page: pageForAllInvoiceData}) => {
+          console.log(
+            `Creating a new page for order ${order['order_number']}...`,
+          );
+          // const newPage = await browser.newPage();
+          console.log('Getting all order invoice data...');
+          const invoicesData = await getTargetAPIOrderAllInvoiceData({
+            context,
+            orderNumber: order['order_number'],
+            page: pageForAllInvoiceData,
+          });
 
-        console.log(
-          `Got order invoice data for order ${
-            order['order_number'] ?? 'NO_ORDER_NUMBER'
-          }...`,
-        );
+          console.log(
+            `Got order invoice data for order ${
+              order['order_number'] ?? 'NO_ORDER_NUMBER'
+            }...`,
+          );
 
-        // newPage.close();
+          // newPage.close();
 
-        const orderDateString = order['placed_date'];
+          const orderDateString = order['placed_date'];
 
-        return {
-          __orderIndex: index,
-          _orderDate:
-            orderDateString == null || orderDateString.length === 0
-              ? null
-              : new Date(orderDateString).valueOf(),
-          _orderNumber: order['order_number'],
-          invoicesData: invoicesData,
-          orderHistoryData: order,
-        };
-      },
-      attemptsLimit: RETRY_ATTEMPTS_LIMIT,
-      attemptsMade: 0,
-      id: `${
-        order['order_number'] ?? `NO_ORDER_NUMBER-${uuidv4()}`
-      }-${index}-invoiceAction`,
-    }),
-  );
+          return {
+            __orderIndex: index,
+            _orderDate:
+              orderDateString == null || orderDateString.length === 0
+                ? null
+                : new Date(orderDateString).valueOf(),
+            _orderNumber: order['order_number'],
+            invoicesData: invoicesData,
+            orderHistoryData: order,
+          };
+        },
+        attemptsLimit: RETRY_ATTEMPTS_LIMIT,
+        attemptsMade: 0,
+        id: `${
+          order['order_number'] ?? `NO_ORDER_NUMBER-${uuidv4()}`
+        }-${index}-invoiceAction`,
+      }),
+    );
 
-  const combinedOrderData: Array<unknown> = [];
-  let actionRunCount = 0;
+    const combinedOrderData: Array<unknown> = [];
+    let actionRunCount = 0;
 
-  console.log('📋 Beginning to process action queue...');
-  while (orderInvoiceActionQueue.length > 0) {
-    const currentAction = orderInvoiceActionQueue.shift();
-    if (currentAction == null) {
-      break;
-    }
-
-    if (currentAction.attemptsMade >= currentAction.attemptsLimit) {
-      console.log(
-        `Action ${currentAction.id} has already made ${currentAction.attemptsMade}/${currentAction.attemptsLimit} attempts. Skipping.`,
-      );
-      continue;
-    }
-
-    try {
-      if (actionRunCount > 0) {
-        await mainPage.waitForTimeout(TIMEOUT_BETWEEN_ORDERS_MS);
+    console.log('📋 Beginning to process action queue...');
+    while (orderInvoiceActionQueue.length > 0) {
+      const currentAction = orderInvoiceActionQueue.shift();
+      if (currentAction == null) {
+        break;
       }
-      actionRunCount += 1;
 
-      console.log(
-        `🟢 Initiating action ${currentAction.id} (attempt ${
-          currentAction.attemptsMade + 1
-        }/${currentAction.attemptsLimit})...`,
-      );
-      const orderData = await currentAction.action({page: mainPage});
-      console.debug(`Action ${currentAction.id} completed successfully.`);
-      combinedOrderData.push(orderData);
-      console.debug(`Action ${currentAction.id} data pushed.`);
-    } catch (error) {
-      console.warn(`Action ${currentAction.id} threw the following error:`);
-      console.warn(error);
-
-      if (currentAction.attemptsMade + 1 < currentAction.attemptsLimit) {
-        // Queue the action to retry right away. Running these actions in their original order may have some advantages in terms of clarity.
-        console.debug(`Re-queuing action ${currentAction.id}...`);
-        orderInvoiceActionQueue.unshift({
-          ...currentAction,
-          attemptsMade: currentAction.attemptsMade + 1,
-        });
+      if (currentAction.attemptsMade >= currentAction.attemptsLimit) {
+        console.log(
+          `Action ${currentAction.id} has already made ${currentAction.attemptsMade}/${currentAction.attemptsLimit} attempts. Skipping.`,
+        );
+        continue;
       }
-    }
-  } // END WHILE
 
-  /**
-   * Output the combined order data to a file
-   */
-  const combinedOutputData = {
-    _createdTimestamp: outputTimestamp.valueOf(),
-    _params: {orderCount},
-    invoiceAndOrderData: combinedOrderData,
-  };
+      try {
+        if (actionRunCount > 0) {
+          await mainPage.waitForTimeout(TIMEOUT_BETWEEN_ORDERS_MS);
+        }
+        actionRunCount += 1;
 
-  writeToJSONFileWithDateTime({
-    basePath: 'output/',
-    data: combinedOutputData,
-    name: getOutputDataFilenamePrefix({
-      dataType: 'invoiceAndOrderData',
-      fileNumber: 2,
-      totalFiles: 2,
-    }),
-    timestamp: outputTimestamp,
-  });
+        console.log(
+          `🟢 Initiating action ${currentAction.id} (attempt ${
+            currentAction.attemptsMade + 1
+          }/${currentAction.attemptsLimit})...`,
+        );
+        const orderData = await currentAction.action({page: mainPage});
+        console.debug(`Action ${currentAction.id} completed successfully.`);
+        combinedOrderData.push(orderData);
+        console.debug(`Action ${currentAction.id} data pushed.`);
+      } catch (error) {
+        console.warn(`Action ${currentAction.id} threw the following error:`);
+        console.warn(error);
+
+        if (currentAction.attemptsMade + 1 < currentAction.attemptsLimit) {
+          // Queue the action to retry right away. Running these actions in their original order may have some advantages in terms of clarity.
+          console.debug(`Re-queuing action ${currentAction.id}...`);
+          orderInvoiceActionQueue.unshift({
+            ...currentAction,
+            attemptsMade: currentAction.attemptsMade + 1,
+          });
+        }
+      }
+    } // END WHILE
+
+    /**
+     * Output the combined order data to a file
+     */
+    const combinedOutputData = {
+      _createdTimestamp: outputTimestamp.valueOf(),
+      _params: {orderCount},
+      invoiceAndOrderData: combinedOrderData,
+    };
+
+    writeToJSONFileWithDateTime({
+      basePath: 'output/',
+      data: combinedOutputData,
+      name: getOutputDataFilenamePrefix({
+        dataType: 'invoiceAndOrderData',
+        fileNumber: 2,
+        totalFiles: 2,
+      }),
+      timestamp: outputTimestamp,
+    });
+  } else {
+    console.log('Skipping invoice data...');
+  }
 
   console.log('Doing final timeout before closing browser context...');
   await mainPage.waitForTimeout(30 * 1000);
