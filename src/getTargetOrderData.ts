@@ -8,7 +8,10 @@ import {v4 as uuidv4} from 'uuid';
 
 import {playwrightAuthContextOptions, playwrightAuthFilePath} from './Auth';
 import {TARGET_ORDER_PAGE_URL} from './Constants';
-import {writeToJSONFileWithDateTime} from './Files';
+import {
+  getOutputDataFilenamePrefix,
+  writeToJSONFileWithDateTime,
+} from './Files';
 import {getNewBrowser} from './Setup';
 import {
   getTargetAPIOrderAllInvoiceData,
@@ -20,6 +23,8 @@ const OUTPUT_DIR = 'output';
 const TIMEOUT_BETWEEN_ORDERS_MS = 0.5 * 1000;
 
 const TIMEOUT_FOR_INITIAL_AUTHENTICATION = 120 * 1000;
+
+const RETRY_ATTEMPTS_LIMIT = 3;
 
 function shouldLogRequestResponse(urlString: string) {
   const url = new URL(urlString);
@@ -44,6 +49,14 @@ type ActionQueueItem = {
   attemptsLimit: number;
   attemptsMade: number;
   id: string;
+};
+
+type OutputData = {
+  [key: string]: unknown;
+  _createdTimestamp: number;
+  _params: {
+    orderCount: number;
+  };
 };
 
 // const DEV_ONLY_ORDER_LIMIT = 5;
@@ -91,6 +104,34 @@ type ActionQueueItem = {
     page: mainPage,
   });
 
+  /**
+   * Output the order history data to a file before proceeding in case the remainder fails
+   */
+  const outputTimestamp = new Date();
+
+  // Create the dir if it doesn't exist
+  mkdirSync(OUTPUT_DIR, {recursive: true});
+
+  const outputDataOrderHistory: OutputData = {
+    _createdTimestamp: outputTimestamp.valueOf(),
+    _params: {orderCount},
+    orderHistoryData: orderHistoryData,
+  };
+
+  writeToJSONFileWithDateTime({
+    basePath: OUTPUT_DIR,
+    data: outputDataOrderHistory,
+    name: getOutputDataFilenamePrefix({
+      dataType: 'orderHistoryData',
+      fileNumber: 1,
+      totalFiles: 2,
+    }),
+    timestamp: outputTimestamp,
+  });
+
+  /**
+   * Get all invoice data for each order
+   */
   const orderInvoiceActionQueue: ActionQueueItem[] = orderHistoryData.map(
     (order, index) => ({
       action: async ({page: pageForAllInvoiceData}) => {
@@ -126,7 +167,7 @@ type ActionQueueItem = {
           orderHistoryData: order,
         };
       },
-      attemptsLimit: 3,
+      attemptsLimit: RETRY_ATTEMPTS_LIMIT,
       attemptsMade: 0,
       id: `${
         order['order_number'] ?? `NO_ORDER_NUMBER-${uuidv4()}`
@@ -134,7 +175,7 @@ type ActionQueueItem = {
     }),
   );
 
-  const allOrderData: Array<unknown> = [];
+  const combinedOrderData: Array<unknown> = [];
   let actionRunCount = 0;
 
   console.log('📋 Beginning to process action queue...');
@@ -164,7 +205,7 @@ type ActionQueueItem = {
       );
       const orderData = await currentAction.action({page: mainPage});
       console.debug(`Action ${currentAction.id} completed successfully.`);
-      allOrderData.push(orderData);
+      combinedOrderData.push(orderData);
       console.debug(`Action ${currentAction.id} data pushed.`);
     } catch (error) {
       console.warn(`Action ${currentAction.id} threw the following error:`);
@@ -181,20 +222,24 @@ type ActionQueueItem = {
     }
   } // END WHILE
 
-  // Create the dir if it doesn't exist
-  mkdirSync(OUTPUT_DIR, {recursive: true});
-
-  const outputData = {
-    _createdTimestamp: new Date().valueOf(),
+  /**
+   * Output the combined order data to a file
+   */
+  const combinedOutputData = {
+    _createdTimestamp: outputTimestamp.valueOf(),
     _params: {orderCount},
-    invoiceAndOrderData: allOrderData,
-    orderHistoryData,
+    invoiceAndOrderData: combinedOrderData,
   };
 
   writeToJSONFileWithDateTime({
     basePath: 'output/',
-    data: outputData,
-    name: `targetOrderInvoiceData-${orderCount}-orders`,
+    data: combinedOutputData,
+    name: getOutputDataFilenamePrefix({
+      dataType: 'invoiceAndOrderData',
+      fileNumber: 2,
+      totalFiles: 2,
+    }),
+    timestamp: outputTimestamp,
   });
 
   console.log('Doing final timeout before closing browser context...');
@@ -202,6 +247,7 @@ type ActionQueueItem = {
   console.log('Closing browser context...');
 
   // Save the cookies to the auth file, assuming that's better than resetting from a previous state
+  console.log('Saving browser state to auth file...');
   await mainPage.context().storageState({
     path: playwrightAuthFilePath,
   });
