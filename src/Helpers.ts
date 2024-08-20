@@ -1,13 +1,13 @@
-import type {Page, Request, Response} from 'playwright';
-
-import fetch from 'node-fetch';
+import type {Page, Request, Response as PlaywrightResponse} from 'playwright';
 
 type LoadMoreConfig = {
   orderCount: number;
   page: Page;
 };
 
-export async function getJSONNoThrow(response: Response): Promise<unknown> {
+export async function getJSONNoThrow(
+  response: PlaywrightResponse | Response,
+): Promise<unknown> {
   try {
     return await response.json();
   } catch (error) {
@@ -27,6 +27,14 @@ export async function extractFetchConfigFromRequest(
 ): Promise<{requestInit: RequestInit; url: URL}> {
   const url = new URL(request.url());
   const headers = await request.allHeaders();
+
+  const newHeaders: HeadersInit = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (!key.startsWith(':')) {
+      newHeaders[key] = value;
+    }
+  }
+
   // const referrer = await request.;
   // fetch(url, {
   //   body: null,
@@ -38,7 +46,10 @@ export async function extractFetchConfigFromRequest(
   //   referrerPolicy: 'no-referrer-when-downgrade',
   // });
 
-  const fetchConfig = {requestInit: {body: null, headers, method: 'GET'}, url};
+  const fetchConfig = {
+    requestInit: {body: null, headers: newHeaders, method: 'GET'},
+    url,
+  };
   console.log('[extractFetchConfigFromRequest] fetchConfig:', fetchConfig);
   return fetchConfig;
 }

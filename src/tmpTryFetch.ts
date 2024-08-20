@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+// import fetch from 'node-fetch';
 
 const result = await fetch(
   'https://api.target.com/guest_order_aggregations/v1/order_history?page_number=1&page_size=20&order_purchase_type=ONLINE&pending_order=true&shipt_status=true',
@@ -26,3 +26,5 @@ const result = await fetch(
 );
 
 console.log('result:', await result.json());
+
+export {};

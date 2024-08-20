@@ -4,7 +4,8 @@
 
 import type {BrowserContext, Page, Response} from 'playwright';
 
-import fetch from 'node-fetch';
+import fillRange from 'fill-range';
+import nullthrows from 'nullthrows';
 
 import {
   TARGET_API_HOSTNAME,
@@ -14,7 +15,7 @@ import {
 import {
   extractFetchConfigFromRequest,
   getJSONNoThrow,
-  loadMoreOrdersUntilOrderCount,
+  // loadMoreOrdersUntilOrderCount,
 } from './Helpers';
 
 const TARGET_RESOURCE_NOT_FOUND_CODE = 102;
@@ -116,17 +117,103 @@ export async function getTargetAPIOrderHistoryData({
   orderCount,
   page,
 }: GetTargetAPIOrderHistoryConfig): Promise<TargetAPIOrderHistoryItem[]> {
-  const orderResponsePages: Array<Array<unknown>> = [];
+  // const orderResponsePages: Array<Array<unknown>> = [];
 
-  const onPageResponse: ResponseListener = async (response: Response) => {
-    // console.log('<<', response.status(), response.url());
+  // const onPageResponse: ResponseListener = async (response: Response) => {
+  //   // console.log('<<', response.status(), response.url());
 
+  //   const url = new URL(response.url());
+  //   if (
+  //     url.host === TARGET_API_HOSTNAME &&
+  //     url.pathname.endsWith('order_history')
+  //   ) {
+  //     const responseJson = (await getJSONNoThrow(response)) as {
+  //       [key: string]: unknown;
+  //       request: {page_number: number; page_size: number};
+  //     };
+
+  //     if (responseJson == null) {
+  //       console.warn(
+  //         '[getTargetAPIOrderHistoryData] Response JSON is null. This should not happen',
+  //       );
+  //       return;
+  //     }
+
+  //     const pageNumber = responseJson['request']?.['page_number'];
+  //     const pageSize = responseJson['request']?.['page_size'];
+  //     const ordersArray = responseJson['orders'] as unknown[];
+
+  //     console.log(
+  //       `Received order_history data for page number ${pageNumber} (page size: ${pageSize})`,
+  //     );
+
+  //     if (typeof pageNumber !== 'number' || typeof pageSize !== 'number') {
+  //       throw new Error('Page number or page size is not a number');
+  //     }
+
+  //     if (orderResponsePages[pageNumber] != null) {
+  //       console.log(
+  //         `Overwriting existing order data for page number ${pageNumber}`,
+  //         {
+  //           ordersArray,
+  //           pageNumber,
+  //           pageSize,
+  //         },
+  //       );
+  //     }
+  //     orderResponsePages[pageNumber] = ordersArray;
+  //   }
+  // };
+
+  // page.on('response', onPageResponse);
+
+  console.log('Order count:', orderCount);
+
+  const responsePromise = page.waitForResponse((response) => {
     const url = new URL(response.url());
-    if (
+    console.log(`Response received from ${url}:`, response.status());
+    return (
       url.host === TARGET_API_HOSTNAME &&
-      url.pathname.endsWith('order_history')
-    ) {
-      const responseJson = (await getJSONNoThrow(response)) as {
+      url.pathname.startsWith(TARGET_API_ORDER_HISTORY_ENDPOINT_PATHNAME)
+    );
+  });
+
+  await page.goto(TARGET_ORDER_PAGE_URL);
+
+  const response = await responsePromise;
+
+  const {url: urlFromInitialRequest, requestInit} =
+    await extractFetchConfigFromRequest(response.request());
+
+  const initialPageSize = parseInt(
+    nullthrows(urlFromInitialRequest.searchParams.get('page_size')),
+  );
+  const initialPageNumber = parseInt(
+    nullthrows(urlFromInitialRequest.searchParams.get('page_number')),
+  );
+
+  if (initialPageNumber !== 1) {
+    throw new Error('pageNumber should be 1 for the first request');
+  }
+
+  const pagesRequiredForOrderCount = Math.ceil(orderCount / initialPageSize);
+  const pageNumbersToFetch = fillRange(1, pagesRequiredForOrderCount);
+
+  const pages = await Promise.all(
+    pageNumbersToFetch.map(async (pageNumberToFetch) => {
+      console.log(
+        `📡 Fetching page number ${pageNumberToFetch} directly from the API...`,
+      );
+
+      const newUrl = new URL(urlFromInitialRequest);
+      newUrl.searchParams.set('page_number', pageNumberToFetch.toString());
+
+      const newResponse = await fetch(newUrl, requestInit);
+
+      // console.log('New response:', newResponse);
+      // console.log('New response JSON:', await newResponse.json());
+
+      const responseJson = (await getJSONNoThrow(newResponse)) as {
         [key: string]: unknown;
         request: {page_number: number; page_size: number};
       };
@@ -146,55 +233,18 @@ export async function getTargetAPIOrderHistoryData({
         `Received order_history data for page number ${pageNumber} (page size: ${pageSize})`,
       );
 
-      if (typeof pageNumber !== 'number' || typeof pageSize !== 'number') {
-        throw new Error('Page number or page size is not a number');
+      if (
+        typeof pageNumberToFetch !== 'number' ||
+        typeof pageSize !== 'number'
+      ) {
+        console.warn('Page number or page size is not a number');
       }
 
-      if (orderResponsePages[pageNumber] != null) {
-        console.log(
-          `Overwriting existing order data for page number ${pageNumber}`,
-          {
-            ordersArray,
-            pageNumber,
-            pageSize,
-          },
-        );
-      }
-      orderResponsePages[pageNumber] = ordersArray;
-    }
-  };
-
-  page.on('response', onPageResponse);
-
-  const responsePromise = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    console.log(`Response received from ${url}:`, response.status());
-    return (
-      url.host === TARGET_API_HOSTNAME &&
-      url.pathname.startsWith(TARGET_API_ORDER_HISTORY_ENDPOINT_PATHNAME)
-    );
-  });
-
-  await page.goto(TARGET_ORDER_PAGE_URL);
-
-  const response = await responsePromise;
-
-  const {url, requestInit} = await extractFetchConfigFromRequest(
-    response.request(),
+      return ordersArray;
+    }),
   );
 
-  console.log('Trying to hit the API directly now...');
-  const newUrl = new URL(url);
-  newUrl.searchParams.set('page_number', '2');
-
-  const newResponse = await fetch(newUrl, requestInit);
-
-  // Load more orders and capture the data that comes in
-  await loadMoreOrdersUntilOrderCount({orderCount: orderCount, page});
-
-  // TODO: use waitForResponse to make sure we have the data: https://playwright.dev/docs/api/class-page#page-wait-for-response
-
-  const orderData = orderResponsePages.flat();
+  const orderData = pages.flat();
 
   console.log(
     `Order data from API responses (length: ${orderData.length}):`,
@@ -202,7 +252,7 @@ export async function getTargetAPIOrderHistoryData({
     orderData,
   );
 
-  page.off('response', onPageResponse);
+  // page.off('response', onPageResponse);
 
   if (!isTargetOrderHistory(orderData)) {
     throw new Error('Order data is not in expected format');

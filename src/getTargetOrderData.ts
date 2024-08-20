@@ -101,7 +101,7 @@ type OutputData = {
   /**
    * Get the order history data
    */
-  const orderCount = 20;
+  const orderCount = 150;
 
   console.log('📋 Getting order history data...');
   const orderHistoryData = await getTargetAPIOrderHistoryData({
