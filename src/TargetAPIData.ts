@@ -1,22 +1,14 @@
-/**
- * TODO: Write a function that extracts categorization info about the items from the order main page, using order_lines[number].item.product_classification.product_type_name
- */
-
 import type {BrowserContext, Page, Response} from 'playwright';
 
 import nullthrows from 'nullthrows';
 
 import {
   TARGET_API_HOSTNAME,
-  TARGET_API_ORDER_HISTORY_ENDPOINT_PATHNAME,
+  TARGET_API_ORDER_HISTORY_FULL_URL,
   TARGET_ORDER_PAGE_URL,
 } from './Constants';
 import {range} from './GeneralUtils';
-import {
-  extractFetchConfigFromRequest,
-  getJSONNoThrow,
-  // loadMoreOrdersUntilOrderCount,
-} from './Helpers';
+import {getFetchConfig, getJSONNoThrow} from './Helpers';
 
 const TARGET_RESOURCE_NOT_FOUND_CODE = 102;
 
@@ -119,27 +111,17 @@ export async function getTargetAPIOrderHistoryData({
 }: GetTargetAPIOrderHistoryConfig): Promise<TargetAPIOrderHistoryItem[]> {
   console.log('[getTargetAPIOrderHistoryData] Order count:', orderCount);
 
-  const responsePromise = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    console.log(`Response received from ${url}:`, response.status());
-    return (
-      url.host === TARGET_API_HOSTNAME &&
-      url.pathname.startsWith(TARGET_API_ORDER_HISTORY_ENDPOINT_PATHNAME)
-    );
+  const {apiURL: apiURLFromInitialRequest, requestInit} = await getFetchConfig({
+    browserURL: TARGET_ORDER_PAGE_URL,
+    endpointURLToWatch: TARGET_API_ORDER_HISTORY_FULL_URL,
+    page,
   });
 
-  await page.goto(TARGET_ORDER_PAGE_URL);
-
-  const response = await responsePromise;
-
-  const {url: urlFromInitialRequest, requestInit} =
-    await extractFetchConfigFromRequest(response.request());
-
   const initialPageSize = parseInt(
-    nullthrows(urlFromInitialRequest.searchParams.get('page_size')),
+    nullthrows(apiURLFromInitialRequest.searchParams.get('page_size')),
   );
   const initialPageNumber = parseInt(
-    nullthrows(urlFromInitialRequest.searchParams.get('page_number')),
+    nullthrows(apiURLFromInitialRequest.searchParams.get('page_number')),
   );
 
   if (initialPageNumber !== 1) {
@@ -156,7 +138,7 @@ export async function getTargetAPIOrderHistoryData({
         `📡 Fetching page number ${pageNumberToFetch} directly from the API...`,
       );
 
-      const newUrl = new URL(urlFromInitialRequest);
+      const newUrl = new URL(apiURLFromInitialRequest);
       newUrl.searchParams.set('page_number', pageNumberToFetch.toString());
 
       const newResponse = await fetch(newUrl, requestInit);
@@ -184,10 +166,7 @@ export async function getTargetAPIOrderHistoryData({
         `Received order_history data for page number ${pageNumber} (page size: ${pageSize})`,
       );
 
-      if (
-        typeof pageNumberToFetch !== 'number' ||
-        typeof pageSize !== 'number'
-      ) {
+      if (typeof pageNumber !== 'number' || typeof pageSize !== 'number') {
         console.warn('Page number or page size is not a number');
       }
 

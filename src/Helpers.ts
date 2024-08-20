@@ -6,8 +6,8 @@ type LoadMoreConfig = {
 };
 
 export type FetchConfig = {
+  apiURL: URL;
   requestInit: RequestInit;
-  url: URL;
 };
 
 export type FetchConfigWithResponse = FetchConfig & {
@@ -85,24 +85,19 @@ export async function getFetchConfig({
 export async function extractFetchConfigFromRequest(
   request: Request,
 ): Promise<FetchConfig> {
-  const url = new URL(request.url());
+  const apiURL = new URL(request.url());
   const headers = await request.allHeaders();
   console.debug('[extractFetchConfigFromRequest] all headers:', headers);
-  console.debug(
-    '[extractFetchConfigFromRequest] all headers array:',
-    await request.headersArray(),
-  );
+  // console.debug(
+  //   '[extractFetchConfigFromRequest] all headers array:',
+  //   await request.headersArray(),
+  // );
 
   const newHeaders: HeadersInit = {};
   for (const [key, value] of Object.entries(headers)) {
     // Skip HTTP/2 pseudo-headers
     if (!key.startsWith(':')) {
       newHeaders[key] = value;
-    } else {
-      console.debug(
-        '[extractFetchConfigFromRequest] Skipping pseudo-header:',
-        key,
-      );
     }
   }
 
@@ -116,12 +111,12 @@ export async function extractFetchConfigFromRequest(
   }
 
   const fetchConfig = {
+    apiURL,
     requestInit: {
       // body: null, // Let's not specify the body at all
       headers: newHeaders,
       method: requestMethod,
     },
-    url,
   };
   console.log('[extractFetchConfigFromRequest] fetchConfig:', fetchConfig);
   return fetchConfig;

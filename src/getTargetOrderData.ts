@@ -68,6 +68,8 @@ type OutputData = {
   // Set auth credentials
   // await authenticateIfNeeded();
 
+  console.log('\n');
+
   // Setup
   const {
     browser,
@@ -101,9 +103,9 @@ type OutputData = {
   /**
    * Get the order history data
    */
-  const orderCount = 150;
+  const orderCount = 30;
 
-  console.log('📋 Getting order history data...');
+  console.log('\n\n📋 Getting order history data...');
   const orderHistoryData = await getTargetAPIOrderHistoryData({
     orderCount,
     page: mainPage,
@@ -135,7 +137,7 @@ type OutputData = {
   });
 
   if (GET_INVOICE_DATA) {
-    console.log('📋 Getting invoice data...');
+    console.log('\n\n📋 Getting invoice data...');
     /**
      * Get all invoice data for each order
      */
@@ -252,7 +254,7 @@ type OutputData = {
     console.log('Skipping invoice data...');
   }
 
-  console.log('Doing final timeout before closing browser context...');
+  console.log('\n\nDoing final timeout before closing browser context...');
   await mainPage.waitForTimeout(30 * 1000);
   console.log('Closing browser context...');
 
