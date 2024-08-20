@@ -4,7 +4,6 @@
 
 import type {BrowserContext, Page, Response} from 'playwright';
 
-import fillRange from 'fill-range';
 import nullthrows from 'nullthrows';
 
 import {
@@ -12,6 +11,7 @@ import {
   TARGET_API_ORDER_HISTORY_ENDPOINT_PATHNAME,
   TARGET_ORDER_PAGE_URL,
 } from './Constants';
+import {range} from './GeneralUtils';
 import {
   extractFetchConfigFromRequest,
   getJSONNoThrow,
@@ -197,7 +197,7 @@ export async function getTargetAPIOrderHistoryData({
   }
 
   const pagesRequiredForOrderCount = Math.ceil(orderCount / initialPageSize);
-  const pageNumbersToFetch = fillRange(1, pagesRequiredForOrderCount);
+  const pageNumbersToFetch = range(1, pagesRequiredForOrderCount + 1);
 
   const pages = await Promise.all(
     pageNumbersToFetch.map(async (pageNumberToFetch) => {

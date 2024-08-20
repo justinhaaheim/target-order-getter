@@ -28,7 +28,6 @@
     "@playwright/test": "1.46.1",
     "@types/uuid": "10.0.0",
     "dayjs": "1.11.12",
-    "fill-range": "7.1.1",
     "nullthrows": "1.1.1",
     "playwright": "1.46.1",
     "tsx": "4.17.0",
