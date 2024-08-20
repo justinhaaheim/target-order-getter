@@ -1,6 +1,7 @@
 # ToDo
 
 - [ ] Add fingerprinting library
+
 - [ ] Try opening invoices in parallel on multiple pages, with referrer set
 - [ ] Listen for requestfinished, not response as that doesn't guarantee the response body is there. https://playwright.dev/docs/api/class-page#page-event-request-finished
 - [ ] Add winston logger so I can adjust log level, and so I can log to a file if need be.
