@@ -3,6 +3,7 @@
 
 import type {Page, Request, Response} from 'playwright';
 
+import {Command} from 'commander';
 import {mkdirSync} from 'fs';
 import {v4 as uuidv4} from 'uuid';
 
@@ -17,6 +18,19 @@ import {
   getTargetAPIOrderAllInvoiceData,
   getTargetAPIOrderHistoryData,
 } from './TargetAPIData';
+
+const program = new Command();
+
+program.name('getTargetOrderData');
+program.requiredOption(
+  '-o, --orderCount <number>',
+  'The number of orders to fetch',
+);
+program.parse();
+const cliOptions = program.opts();
+
+// The number of orders to fetch
+const orderCount = parseInt(cliOptions['orderCount']);
 
 const OUTPUT_DIR = 'output';
 
@@ -98,12 +112,10 @@ type OutputData = {
   await mainPage.waitForURL(`${TARGET_ORDER_PAGE_URL}**`, {
     timeout: TIMEOUT_FOR_INITIAL_AUTHENTICATION,
   });
-  // TODO:
 
   /**
    * Get the order history data
    */
-  const orderCount = 30;
 
   console.log('\n\n📋 Getting order history data...');
   const orderHistoryData = await getTargetAPIOrderHistoryData({

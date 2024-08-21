@@ -188,7 +188,8 @@ export async function getTargetAPIOrderHistoryData({
     throw new Error('Order data is not in expected format');
   }
 
-  return orderData;
+  // NOTE: We will often be fetching more orders than we need, but for clarity let's only return the amount requested
+  return orderData.slice(0, orderCount);
 }
 
 function isTargetAPIOrderInvoiceOverviewURL(
