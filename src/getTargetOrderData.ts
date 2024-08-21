@@ -2,6 +2,7 @@ import type {Page, Request, Response} from 'playwright';
 
 import {Command} from 'commander';
 import {mkdirSync} from 'fs';
+import nullthrows from 'nullthrows';
 import {v4 as uuidv4} from 'uuid';
 
 import {playwrightAuthContextOptions, playwrightAuthFilePath} from './Auth';
@@ -14,28 +15,27 @@ import {getNewBrowser} from './Setup';
 import {
   getTargetAPIOrderAllInvoiceData,
   getTargetAPIOrderHistoryData,
+  getTargetAPIOrderInvoiceOverviewDataFetchConfig,
 } from './TargetAPIData';
 
 const program = new Command();
 
 program.name('getTargetOrderData');
-program.requiredOption(
-  '-o, --orderCount <number>',
-  'The number of orders to fetch',
-);
+program
+  .requiredOption('-o, --orderCount <number>', 'The number of orders to fetch')
+  .option('--skipInvoiceData', 'Skip fetching invoice data');
 program.parse();
 const cliOptions = program.opts();
 
 // The number of orders to fetch
 const orderCount = parseInt(cliOptions['orderCount']);
+const skipInvoiceData: boolean = cliOptions['skipInvoiceData'];
 
 const OUTPUT_DIR = 'output';
 
 const TIMEOUT_BETWEEN_ORDERS_MS = 0.5 * 1000;
 
 const TIMEOUT_FOR_INITIAL_AUTHENTICATION = 120 * 1000;
-
-const GET_INVOICE_DATA = false;
 
 const RETRY_ATTEMPTS_LIMIT = 3;
 
@@ -151,8 +151,15 @@ type OutputData = {
     timestamp: outputTimestamp,
   });
 
-  if (GET_INVOICE_DATA) {
+  if (!skipInvoiceData && orderHistoryData.length > 0) {
     console.log('\n\n📋 Getting invoice data...');
+
+    const invoiceOverviewFetchConfig =
+      await getTargetAPIOrderInvoiceOverviewDataFetchConfig({
+        orderNumber: nullthrows(orderHistoryData[0]?.['order_number']),
+        page: mainPage,
+      });
+
     /**
      * Get all invoice data for each order
      */
@@ -166,6 +173,7 @@ type OutputData = {
           console.log('Getting all order invoice data...');
           const invoicesData = await getTargetAPIOrderAllInvoiceData({
             context,
+            invoiceOverviewFetchConfig,
             orderNumber: order['order_number'],
             page: pageForAllInvoiceData,
           });

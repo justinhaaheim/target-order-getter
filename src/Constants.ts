@@ -5,3 +5,7 @@ export const TARGET_API_HOSTNAME = 'api.target.com';
 export const TARGET_API_ORDER_HISTORY_ENDPOINT_PATHNAME =
   '/guest_order_aggregations/v1/order_history';
 export const TARGET_API_ORDER_HISTORY_FULL_URL = `https://${TARGET_API_HOSTNAME}${TARGET_API_ORDER_HISTORY_ENDPOINT_PATHNAME}`;
+
+// export const TARGET_API_INVOICE_OVERVIEW_ENDPOINT_PATHNAME =
+//   '/post_order_invoices/v1/orders/912001851281114/invoices';
+// export const TARGET_API_INVOICE_OVERVIEW_FULL_URL = `https://${TARGET_API_HOSTNAME}${TARGET_API_INVOICE_OVERVIEW_ENDPOINT_PATHNAME}`;
