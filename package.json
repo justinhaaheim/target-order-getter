@@ -32,6 +32,8 @@
     "dayjs": "1.11.12",
     "nullthrows": "1.1.1",
     "playwright": "1.46.1",
+    "playwright-extra": "4.3.6",
+    "puppeteer-extra-plugin-stealth": "2.11.2",
     "tsx": "4.17.0",
     "uuid": "10.0.0"
   },

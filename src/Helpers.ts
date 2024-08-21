@@ -53,10 +53,10 @@ export async function getFetchConfig({
   // Don't await here -- we want to add the listener now before we navigate to the page, and await later
   const apiResponsePromise = page.waitForResponse((response) => {
     const url = new URL(response.url());
-    console.debug(
-      `[getFetchConfig] Response received from ${url}:`,
-      response.status(),
-    );
+    // console.debug(
+    //   `[getFetchConfig] Response received from ${url}:`,
+    //   response.status(),
+    // );
 
     // NOTE: We may want to rethink how precisely we are/are not matching the endpoint url. Should it just be a strict url.startsWith(endpointURLToWatch) check?
     return (

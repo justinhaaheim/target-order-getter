@@ -3,6 +3,7 @@ import type {BrowserContext, Page, Response} from 'playwright';
 import {RateLimit} from 'async-sema';
 import nullthrows from 'nullthrows';
 
+import config from './config';
 import {
   TARGET_API_HOSTNAME,
   TARGET_API_ORDER_HISTORY_FULL_URL,
@@ -132,8 +133,8 @@ export async function getTargetAPIOrderHistoryData({
   const pagesRequiredForOrderCount = Math.ceil(orderCount / initialPageSize);
   const pageNumbersToFetch = range(1, pagesRequiredForOrderCount + 1);
 
-  const rateLimiter = RateLimit(1, {
-    timeUnit: 500, // milliseconds
+  const rateLimiter = RateLimit(config.requestRateLimiter.rps, {
+    timeUnit: config.requestRateLimiter.timeUnit, // milliseconds
     uniformDistribution: true,
   });
 

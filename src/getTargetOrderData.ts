@@ -1,6 +1,3 @@
-// import assert from 'node:assert';
-// import {chromium, devices} from 'playwright';
-
 import type {Page, Request, Response} from 'playwright';
 
 import {Command} from 'commander';
@@ -49,7 +46,11 @@ function shouldLogRequestResponse(urlString: string) {
     return true;
   }
 
-  if (url.hostname.includes('assets')) {
+  if (!url.hostname.includes('target.com')) {
+    return false;
+  }
+
+  if (url.hostname.includes('assets') || url.hostname.includes('scene7.com')) {
     return false;
   }
 
@@ -82,7 +83,7 @@ type OutputData = {
   // Set auth credentials
   // await authenticateIfNeeded();
 
-  console.log('\n');
+  console.log('');
 
   // Setup
   const {
@@ -112,6 +113,8 @@ type OutputData = {
   await mainPage.waitForURL(`${TARGET_ORDER_PAGE_URL}**`, {
     timeout: TIMEOUT_FOR_INITIAL_AUTHENTICATION,
   });
+
+  // await mainPage.waitForTimeout(50 * 1000);
 
   /**
    * Get the order history data
