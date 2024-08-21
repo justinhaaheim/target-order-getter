@@ -1,5 +1,6 @@
 import type {BrowserContext, Page, Response} from 'playwright';
 
+import {RateLimit} from 'async-sema';
 import nullthrows from 'nullthrows';
 
 import {
@@ -131,9 +132,16 @@ export async function getTargetAPIOrderHistoryData({
   const pagesRequiredForOrderCount = Math.ceil(orderCount / initialPageSize);
   const pageNumbersToFetch = range(1, pagesRequiredForOrderCount + 1);
 
-  // TODO: add these to a queue and limit how many are sent all at once
+  const rateLimiter = RateLimit(1, {
+    timeUnit: 500, // milliseconds
+    uniformDistribution: true,
+  });
+
   const pages = await Promise.all(
     pageNumbersToFetch.map(async (pageNumberToFetch) => {
+      // Await the rate limiter until it gives us the green light to go
+      await rateLimiter();
+
       console.log(
         `📡 Fetching page number ${pageNumberToFetch} directly from the API...`,
       );

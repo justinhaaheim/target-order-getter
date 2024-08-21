@@ -123,6 +123,8 @@ module.exports = {
 
     'no-unused-vars': NO_UNUSED_VARS_CONFIG,
 
+    'no-warning-comments': [ERROR, {location: 'anywhere', terms: ['nocommit']}],
+
     quotes: [ERROR, 'single', {allowTemplateLiterals: true, avoidEscape: true}],
 
     'react-hooks/exhaustive-deps': ERROR,
