@@ -1,5 +1,8 @@
 # ToDo
 
+- [ ] Investigate whether the fetch call headers/cookies/etc from the target site change over time, or if I can just grab the cookies/data from one call and apply it everywhere.
+- [ ] Consider getting rid of data fields that are large and unneeded, like invoiceData.receipts
+- [ ] Maybe add the ability to cache previous responses, so we can limit how much we're having to hit the API. Can be very simple at first: just a json file with previous responses. Use the API endpoint as a key
 - [ ] Figure out what should happen if there's no data or json throws in each of the functions that fetch some data. What should be returned??
 - [ ] Figure out how to programmatically specify that the referrer url needs to be manually specified for functions like getTargetAPIOrderInvoiceOverviewData. The referrer URL should change for each new order number.
 - [x] Add fingerprinting library (or stealth plugin)

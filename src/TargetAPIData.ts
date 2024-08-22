@@ -1,4 +1,5 @@
 import type {FetchConfigWithResponse} from './Helpers';
+import type {TargetAPIInvoiceOverviewObjectArray} from './TargetAPITypes';
 import type {BrowserContext, Page, Response} from 'playwright';
 
 import {RateLimit} from 'async-sema';
@@ -12,6 +13,10 @@ import {
 } from './Constants';
 import {range} from './GeneralUtils';
 import {getFetchConfig, getJSONNoThrow} from './Helpers';
+import {
+  TargetAPIInvoiceOverviewObjectArrayZod,
+  TargetAPIOrderHistoryObjectArrayZod,
+} from './TargetAPITypes';
 
 const TARGET_RESOURCE_NOT_FOUND_CODE = 102;
 
@@ -22,15 +27,9 @@ export type TargetAPIOrderHistoryItem = {
   summary: {grand_total: string};
 };
 
-export type TargetAPIInvoiceOverviewItem = {
-  [key: string]: unknown;
-  date: string;
-  id: string;
-  type: string;
-};
-
 type GetTargetAPIOrderHistoryConfig = {
   // TODO: Support startDate
+  fetchConfigFromInitialOrderHistoryRequest: FetchConfigWithResponse;
   orderCount: number;
   page: Page;
 };
@@ -86,43 +85,29 @@ export function isTargetOrderHistory(
   });
 }
 
-export function isTargetInvoiceOverviewList(
-  data: unknown,
-): data is TargetAPIInvoiceOverviewItem[] {
-  if (!Array.isArray(data)) {
-    return false;
-  }
-  return data.every((item) => {
-    if (typeof item !== 'object') {
-      return false;
-    }
-    if (typeof item['date'] !== 'string') {
-      return false;
-    }
-    if (typeof item['id'] !== 'string') {
-      return false;
-    }
-    if (typeof item['type'] !== 'string') {
-      return false;
-    }
-    return true;
+export async function getTargetAPIOrderHistoryFetchConfig({
+  page,
+}: {
+  page: Page;
+}): Promise<FetchConfigWithResponse> {
+  return await getFetchConfig({
+    browserURL: TARGET_ORDER_PAGE_URL,
+    endpointURLToWatch: TARGET_API_ORDER_HISTORY_FULL_URL,
+    page,
   });
 }
 
 /**
  * Order History: The list of a customers orders
  */
-export async function getTargetAPIOrderHistoryData({
+export async function getTargetAPIOrderHistoryDataFromAPI({
   orderCount,
-  page,
+  fetchConfigFromInitialOrderHistoryRequest,
 }: GetTargetAPIOrderHistoryConfig): Promise<TargetAPIOrderHistoryItem[]> {
   console.log('[getTargetAPIOrderHistoryData] Order count:', orderCount);
 
-  const {apiURL: apiURLFromInitialRequest, requestInit} = await getFetchConfig({
-    browserURL: TARGET_ORDER_PAGE_URL,
-    endpointURLToWatch: TARGET_API_ORDER_HISTORY_FULL_URL,
-    page,
-  });
+  const {apiURL: apiURLFromInitialRequest, requestInit} =
+    fetchConfigFromInitialOrderHistoryRequest;
 
   const initialPageSize = parseInt(
     nullthrows(apiURLFromInitialRequest.searchParams.get('page_size')),
@@ -197,14 +182,13 @@ export async function getTargetAPIOrderHistoryData({
     orderData,
   );
 
-  // page.off('response', onPageResponse);
-
-  if (!isTargetOrderHistory(orderData)) {
-    throw new Error('Order data is not in expected format');
-  }
+  // Throws if the data is not in the expected format
+  // Because our type has a union with Record<string, unknown>, any keys we haven't specifically typed will still pass through
+  const orderDataTyped = TargetAPIOrderHistoryObjectArrayZod.parse(orderData);
+  console.log('✅ Order history data successfully parsed/validated');
 
   // NOTE: We will often be fetching more orders than we need, but for clarity let's only return the amount requested
-  return orderData.slice(0, orderCount);
+  return orderDataTyped.slice(0, orderCount);
 }
 
 export async function getTargetAPIOrderInvoiceOverviewDataFetchConfig({
@@ -232,7 +216,7 @@ export async function getTargetAPIOrderInvoiceOverviewDataFromAPI({
 }: {
   fetchConfig: FetchConfigWithResponse;
   orderNumber: string;
-}): Promise<TargetAPIInvoiceOverviewItem[] | null> {
+}): Promise<TargetAPIInvoiceOverviewObjectArray | null> {
   // FYI: We can actually get this directly on the order details page. Not entirely sure it shows up on the invoices page (versus being server rendered)
 
   const apiResponse = await fetch(
@@ -258,21 +242,19 @@ export async function getTargetAPIOrderInvoiceOverviewDataFromAPI({
 
   if (responseJson['code'] === TARGET_RESOURCE_NOT_FOUND_CODE) {
     console.log(
-      '[getTargetAPIOrderInvoiceOverviewData] Target API reports resource not found. This can happen when an order was cancelled without any charges/refunds.',
+      '[getTargetAPIOrderInvoiceOverviewData] Target API reports resource not found. This can happen when an order was cancelled without any charges/refunds, or when an order is still processing.',
       responseJson,
     );
     return null;
   }
 
-  if (!isTargetInvoiceOverviewList(responseJson?.invoices)) {
-    throw new Error('Invoice overview data is not in expected format');
-  }
-
-  const invoices = responseJson.invoices;
+  const invoices = TargetAPIInvoiceOverviewObjectArrayZod.parse(
+    responseJson?.invoices,
+  );
 
   if (invoices.length === 0) {
     throw new Error(
-      '[getTargetAPIOrderInvoiceOverviewData] Invoice overview API returned no invoices. This should not happen.',
+      '[getTargetAPIOrderInvoiceOverviewData] Invoice overview API returned no invoices. This should not happen. If there are no invoices, the endpoint just returns an error code.',
     );
   }
 
@@ -355,10 +337,10 @@ export async function getTargetAPIOrderIndividualInvoiceData({
 export async function getTargetAPIOrderAllInvoiceData({
   orderNumber,
   page,
-  invoiceOverviewFetchConfig,
+  fetchConfig,
 }: {
   context: BrowserContext;
-  invoiceOverviewFetchConfig: FetchConfigWithResponse;
+  fetchConfig: FetchConfigWithResponse;
   orderNumber: string;
   page: Page;
 }): Promise<unknown> {
@@ -366,7 +348,7 @@ export async function getTargetAPIOrderAllInvoiceData({
 
   const invoiceOverviewData = await getTargetAPIOrderInvoiceOverviewDataFromAPI(
     {
-      fetchConfig: invoiceOverviewFetchConfig,
+      fetchConfig,
       orderNumber,
     },
   );

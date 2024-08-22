@@ -2,7 +2,6 @@ import type {Page, Request, Response} from 'playwright';
 
 import {Command} from 'commander';
 import {mkdirSync} from 'fs';
-import nullthrows from 'nullthrows';
 import {v4 as uuidv4} from 'uuid';
 
 import {playwrightAuthContextOptions, playwrightAuthFilePath} from './Auth';
@@ -14,8 +13,8 @@ import {
 import {getNewBrowser} from './Setup';
 import {
   getTargetAPIOrderAllInvoiceData,
-  getTargetAPIOrderHistoryData,
-  getTargetAPIOrderInvoiceOverviewDataFetchConfig,
+  getTargetAPIOrderHistoryDataFromAPI,
+  getTargetAPIOrderHistoryFetchConfig,
 } from './TargetAPIData';
 
 const program = new Command();
@@ -119,9 +118,13 @@ type OutputData = {
   /**
    * Get the order history data
    */
+  const fetchConfig = await getTargetAPIOrderHistoryFetchConfig({
+    page: mainPage,
+  });
 
   console.log('\n\n📋 Getting order history data...');
-  const orderHistoryData = await getTargetAPIOrderHistoryData({
+  const orderHistoryData = await getTargetAPIOrderHistoryDataFromAPI({
+    fetchConfigFromInitialOrderHistoryRequest: fetchConfig,
     orderCount,
     page: mainPage,
   });
@@ -153,13 +156,6 @@ type OutputData = {
 
   if (!skipInvoiceData && orderHistoryData.length > 0) {
     console.log('\n\n📋 Getting invoice data...');
-
-    const invoiceOverviewFetchConfig =
-      await getTargetAPIOrderInvoiceOverviewDataFetchConfig({
-        orderNumber: nullthrows(orderHistoryData[0]?.['order_number']),
-        page: mainPage,
-      });
-
     /**
      * Get all invoice data for each order
      */
@@ -173,7 +169,7 @@ type OutputData = {
           console.log('Getting all order invoice data...');
           const invoicesData = await getTargetAPIOrderAllInvoiceData({
             context,
-            invoiceOverviewFetchConfig,
+            fetchConfig,
             orderNumber: order['order_number'],
             page: pageForAllInvoiceData,
           });

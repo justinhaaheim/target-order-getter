@@ -39,7 +39,8 @@ const InvoiceLinesObject = z.object({
 });
  */
 const InvoiceDetailZod = z.object({
-  date: z.string(), // "2024-08-18T20:41:55.000Z",
+  date: z.coerce.date(), // "2024-08-17T19:05:52.000Z"
+  // date: z.string(), // "2024-08-18T20:41:55.000Z",
   id: z.string(),
   lines: z.array(InvoiceLinesObject),
   payments: z.array(PaymentDetail),
@@ -52,6 +53,32 @@ const InvoiceDetailZod = z.object({
 
 export type InvoiceDetail = z.infer<typeof InvoiceDetailZod>;
 
+export const TargetAPIInvoiceOverviewObjectZod =
+  // z.record(z.unknown()).and(
+  z
+    .object({
+      amount: z.number(),
+      date: z.coerce.date(), // "2024-08-17T19:05:52.000Z"
+      id: z.string(),
+      receipt_id: z.string(),
+      type: z.string(), // "SHIPMENT"
+    })
+    // TODO: Decide if passthrough is the right way to handle this
+    .passthrough();
+// );
+
+export type TargetAPIInvoiceOverviewObject = z.infer<
+  typeof TargetAPIInvoiceOverviewObjectZod
+>;
+
+export const TargetAPIInvoiceOverviewObjectArrayZod = z.array(
+  TargetAPIInvoiceOverviewObjectZod,
+);
+
+export type TargetAPIInvoiceOverviewObjectArray = z.infer<
+  typeof TargetAPIInvoiceOverviewObjectArrayZod
+>;
+
 ///////////////////////////////////////////////////////////
 // Order History Data
 ///////////////////////////////////////////////////////////
@@ -62,39 +89,34 @@ const TargetAPIOrderLinesObjectZod = z.object({
     description: z.string(), // "Organic Bananas - 1lb - Good & Gather™"
     tcin: z.string(), // "24010659"
   }),
-  line_type: z.string(), // "GROCERY"
+  line_type: z.string().optional(), // "GROCERY"
   order_line_id: z.string(), // "aef6fb40-5cc1-11ef-9a7e-353d5f9b165f"
   original_quantity: z.number(),
 });
 
 // Originally this was export const targetAPIOrderHistoryItemSchema = z.record(z.unknown()).and( ...
 // which lets in any arbitrary keys.
-export const TargetAPIOrderHistoryObjectZod = z.object({
-  // address: (store address) ...
-  order_lines: z.array(TargetAPIOrderLinesObjectZod),
-  order_number: z.string(),
-  order_purchase_type: z.string(), // "ONLINE"
-  placed_date: z.string(), // "2024-08-17T12:58:39-05:00",
-  summary: z.object({
-    grand_total: z.string(), // Strange this isn't a number
+export const TargetAPIOrderHistoryObjectZod = z.record(z.unknown()).and(
+  z.object({
+    // address: (store address) ...
+    order_lines: z.array(TargetAPIOrderLinesObjectZod),
+    order_number: z.string(),
+    order_purchase_type: z.string(), // "ONLINE"
+    placed_date: z.string(), // "2024-08-17T12:58:39-05:00",
+    summary: z.object({
+      grand_total: z.string(), // Strange this isn't a number
+    }),
   }),
-});
+);
 
 export type TargetAPIOrderHistoryObject = z.infer<
   typeof TargetAPIOrderHistoryObjectZod
 >;
 
-export const targetAPIInvoiceOverviewItemSchema = z.record(z.unknown()).and(
-  z.object({
-    date: z.string(),
-    id: z.string(),
-    type: z.string(),
-  }),
+export const TargetAPIOrderHistoryObjectArrayZod = z.array(
+  TargetAPIOrderHistoryObjectZod,
 );
 
-const pageSchema = z.any();
-
-const getTargetAPIOrderHistoryConfigSchema = z.object({
-  orderCount: z.number(),
-  page: pageSchema,
-});
+export type TargetAPIOrderHistoryObjectArray = z.infer<
+  typeof TargetAPIOrderHistoryObjectArrayZod
+>;
