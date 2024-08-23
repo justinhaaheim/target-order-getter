@@ -253,7 +253,7 @@ type OutputData = {
     /**
      * Output the combined order data to a file
      */
-    const combinedOutputData = {
+    const combinedOutputData: OutputData = {
       _createdTimestamp: outputTimestamp.valueOf(),
       _params: {orderCount},
       invoiceAndOrderData: combinedOrderData,

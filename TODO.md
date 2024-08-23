@@ -1,5 +1,6 @@
 # ToDo
 
+- [ ] If the data doesn't match the schema still output the data, but just also include the error message from the parser. We don't want malformed data to crash the whole thing -- but we do want to be able to troubleshoot it
 - [ ] Investigate whether the fetch call headers/cookies/etc from the target site change over time, or if I can just grab the cookies/data from one call and apply it everywhere.
 - [ ] Consider getting rid of data fields that are large and unneeded, like invoiceData.receipts
 - [ ] Maybe add the ability to cache previous responses, so we can limit how much we're having to hit the API. Can be very simple at first: just a json file with previous responses. Use the API endpoint as a key

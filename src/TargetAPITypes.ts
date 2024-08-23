@@ -11,7 +11,7 @@ const PaymentDetail = z.object({
 });
 
 const InvoiceLinesObjectItem = z.object({
-  description: z.string(),
+  description: z.string().optional(),
   tcin: z.string(),
 });
 
@@ -120,3 +120,27 @@ export const TargetAPIOrderHistoryObjectArrayZod = z.array(
 export type TargetAPIOrderHistoryObjectArray = z.infer<
   typeof TargetAPIOrderHistoryObjectArrayZod
 >;
+
+///////////////////////////////////////////////////////////
+// Output Types
+///////////////////////////////////////////////////////////
+
+export const InvoiceAndOrderDataZod = z.object({
+  __orderIndex: z.number(),
+  _orderDate: z.number(),
+  _orderNumber: z.string(),
+  invoicesData: z.array(InvoiceDetailZod),
+  orderHistoryData: TargetAPIOrderHistoryObjectZod,
+});
+
+export const OutputDataZod = z.object({
+  _createdTimestamp: z.number(),
+  _params: z.object({
+    orderCount: z.number(),
+  }),
+});
+export type OutputData = z.infer<typeof OutputDataZod>;
+
+export const CombinedOutputDataZod = OutputDataZod.extend({
+  invoiceAndOrderData: z.array(InvoiceAndOrderDataZod),
+});
