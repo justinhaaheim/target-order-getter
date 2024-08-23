@@ -132,6 +132,7 @@ export const InvoiceAndOrderDataZod = z.object({
   invoicesData: z.array(InvoiceDetailZod),
   orderHistoryData: TargetAPIOrderHistoryObjectZod,
 });
+export type InvoiceAndOrderData = z.infer<typeof InvoiceAndOrderDataZod>;
 
 export const OutputDataZod = z.object({
   _createdTimestamp: z.number(),
@@ -144,3 +145,4 @@ export type OutputData = z.infer<typeof OutputDataZod>;
 export const CombinedOutputDataZod = OutputDataZod.extend({
   invoiceAndOrderData: z.array(InvoiceAndOrderDataZod),
 });
+export type CombinedOutputData = z.infer<typeof CombinedOutputDataZod>;
