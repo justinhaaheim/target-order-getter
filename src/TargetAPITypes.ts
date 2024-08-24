@@ -4,7 +4,7 @@ import {z} from 'zod';
 // Invoice Data
 ///////////////////////////////////////////////////////////
 const PaymentDetail = z.object({
-  display_card_number: z.string(),
+  display_card_number: z.string().optional(), // This field is missing for things like type: "MANUFACTURERCOUPON" or type: "TARGETGIFTCARD" or type: "GENERALLEDGERADJUSTMENT"
   sub_type_value: z.string(), // "Target Circle Credit Card"
   total_charged: z.number(),
   type: z.string(),

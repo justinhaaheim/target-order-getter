@@ -1,6 +1,6 @@
 // import {Command} from '@commander-js/extra-typings';
 
-import fileToValidate from '../output/2024-08-22__02-40-53__targetOrderData__2-of-2__invoiceAndOrderData.json';
+import fileToValidate from '../output/2024-08-23__22-26-20__targetOrderData__2-of-2__invoiceAndOrderData.json';
 import {CombinedOutputDataZod} from './TargetAPITypes';
 
 // const program = new Command()
