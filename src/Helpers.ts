@@ -17,13 +17,17 @@ export type FetchConfigWithResponse = FetchConfig & {
 
 export async function getJSONNoThrow(
   response: PlaywrightResponse | Response,
-): Promise<unknown> {
+): Promise<unknown | null> {
   try {
     return await response.json();
   } catch (error) {
     console.error('Error parsing JSON:', error);
     return null;
   }
+}
+
+export function isJsObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
 }
 
 async function getCurrentOrderCount(page: Page): Promise<number> {

@@ -38,7 +38,7 @@ const InvoiceLinesObject = z.object({
   extraKey: 61,
 });
  */
-const InvoiceDetailZod = z.object({
+export const InvoiceDetailZod = z.object({
   date: z.coerce.date(), // "2024-08-17T19:05:52.000Z"
   // date: z.string(), // "2024-08-18T20:41:55.000Z",
   id: z.string(),

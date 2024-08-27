@@ -1,19 +1,23 @@
 import type {FetchConfigWithResponse} from './Helpers';
-import type {TargetAPIInvoiceOverviewObjectArray} from './TargetAPITypes';
-import type {BrowserContext, Page, Response} from 'playwright';
+import type {
+  InvoiceDetail,
+  TargetAPIInvoiceOverviewObjectArray,
+} from './TargetAPITypes';
+import type {Page, Response} from 'playwright';
 
 import {RateLimit} from 'async-sema';
 import nullthrows from 'nullthrows';
 
-import config from './config';
 import {
   TARGET_API_HOSTNAME,
   TARGET_API_ORDER_HISTORY_FULL_URL,
   TARGET_ORDER_PAGE_URL,
 } from './Constants';
 import {range} from './GeneralUtils';
-import {getFetchConfig, getJSONNoThrow} from './Helpers';
+import {getFetchConfig, getJSONNoThrow, isJsObject} from './Helpers';
+import projectConfig from './projectConfig';
 import {
+  InvoiceDetailZod,
   TargetAPIInvoiceOverviewObjectArrayZod,
   TargetAPIOrderHistoryObjectArrayZod,
 } from './TargetAPITypes';
@@ -36,15 +40,17 @@ type GetTargetAPIOrderHistoryConfig = {
 
 type ResponseListener = (response: Response) => any;
 
-export function getTargetOrderURL(orderNumber: string): string {
+export function getTargetOrderBrowserURL(orderNumber: string): string {
   return `${TARGET_ORDER_PAGE_URL}/${orderNumber}`;
 }
 
-export function getTargetOrderInvoicesURL(orderNumber: string): string {
+export function getTargetOrderInvoiceOverviewBrowserURL(
+  orderNumber: string,
+): string {
   return `${TARGET_ORDER_PAGE_URL}/${orderNumber}/invoices`;
 }
 
-export function getTargetOrderInvoiceURL({
+export function getTargetOrderInvoiceBrowserURL({
   orderNumber,
   invoiceNumber,
 }: {
@@ -57,6 +63,16 @@ export function getTargetOrderInvoiceURL({
 
 function getTargetAPIInvoiceOverviewEndpointURL(orderNumber: string): string {
   return `https://${TARGET_API_HOSTNAME}/post_order_invoices/v1/orders/${orderNumber}/invoices`;
+}
+
+function getTargetAPIInvoiceEndpointURL({
+  orderNumber,
+  invoiceNumber,
+}: {
+  invoiceNumber: string;
+  orderNumber: string;
+}): string {
+  return `https://${TARGET_API_HOSTNAME}/post_order_invoices/v1/orders/${orderNumber}/invoices/${invoiceNumber}`;
 }
 
 export function isTargetOrderHistory(
@@ -123,8 +139,8 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
   const pagesRequiredForOrderCount = Math.ceil(orderCount / initialPageSize);
   const pageNumbersToFetch = range(1, pagesRequiredForOrderCount + 1);
 
-  const rateLimiter = RateLimit(config.requestRateLimiter.rps, {
-    timeUnit: config.requestRateLimiter.timeUnit, // milliseconds
+  const rateLimiter = RateLimit(projectConfig.requestRateLimiter.rps, {
+    timeUnit: projectConfig.requestRateLimiter.timeUnit, // milliseconds
     uniformDistribution: true,
   });
 
@@ -198,7 +214,8 @@ export async function getTargetAPIOrderInvoiceOverviewDataFetchConfig({
   orderNumber: string;
   page: Page;
 }): Promise<FetchConfigWithResponse> {
-  const invoiceOverviewURL = getTargetOrderInvoicesURL(orderNumber);
+  const invoiceOverviewURL =
+    getTargetOrderInvoiceOverviewBrowserURL(orderNumber);
 
   return await getFetchConfig({
     browserURL: invoiceOverviewURL,
@@ -223,38 +240,43 @@ export async function getTargetAPIOrderInvoiceOverviewDataFromAPI({
     getTargetAPIInvoiceOverviewEndpointURL(orderNumber),
     {
       ...fetchConfig.requestInit,
-      referrer: getTargetOrderInvoicesURL(orderNumber),
+      referrer: getTargetOrderInvoiceOverviewBrowserURL(orderNumber),
     },
   );
 
-  const responseJson = (await getJSONNoThrow(apiResponse)) as {
-    [key: string]: unknown;
-    invoices: Array<{[key: string]: unknown}>;
-  } | null;
+  const responseJson = await getJSONNoThrow(apiResponse);
 
-  if (responseJson == null) {
-    console.warn(
-      '[getTargetAPIOrderInvoiceOverviewData] responseJson is null. This should not happen',
-    );
-    // TODO: Figure out what should actually happen here
-    return null;
+  if (!isJsObject(responseJson)) {
+    const message =
+      '[getTargetAPIOrderInvoiceOverviewDataFromAPI] responseJson is not an object. This should not happen';
+    console.warn(message, {responseJson});
+    throw new Error(message);
   }
 
-  if (responseJson['code'] === TARGET_RESOURCE_NOT_FOUND_CODE) {
+  if (
+    'code' in responseJson &&
+    responseJson['code'] === TARGET_RESOURCE_NOT_FOUND_CODE
+  ) {
     console.log(
-      '[getTargetAPIOrderInvoiceOverviewData] Target API reports resource not found. This can happen when an order was cancelled without any charges/refunds, or when an order is still processing.',
+      '[getTargetAPIOrderInvoiceOverviewDataFromAPI] Target API reports resource not found. This can happen when an order was cancelled without any charges/refunds, or when an order is still processing.',
       responseJson,
     );
     return null;
   }
 
+  if (!('invoices' in responseJson)) {
+    throw new Error(
+      '[getTargetAPIOrderInvoiceOverviewDataFromAPI] Invoice overview API returned no invoices. This should not happen.',
+    );
+  }
+
   const invoices = TargetAPIInvoiceOverviewObjectArrayZod.parse(
-    responseJson?.invoices,
+    responseJson['invoices'],
   );
 
   if (invoices.length === 0) {
     throw new Error(
-      '[getTargetAPIOrderInvoiceOverviewData] Invoice overview API returned no invoices. This should not happen. If there are no invoices, the endpoint just returns an error code.',
+      '[getTargetAPIOrderInvoiceOverviewDataFromAPI] Invoice overview API returned no invoices. This should not happen. If there are no invoices, the endpoint just returns an error code.',
     );
   }
 
@@ -268,7 +290,53 @@ export async function getTargetAPIOrderInvoiceOverviewDataFromAPI({
 /**
  * Individual Invoice Data: The detailed data for a specific invoice
  */
-export async function getTargetAPIOrderIndividualInvoiceData({
+export async function getTargetAPIOrderIndividualInvoiceDataFromAPI({
+  fetchConfig,
+  orderNumber,
+  invoiceNumber,
+}: {
+  fetchConfig: FetchConfigWithResponse;
+  invoiceNumber: string;
+  orderNumber: string;
+}): Promise<InvoiceDetail | null> {
+  const apiResponse = await fetch(
+    getTargetAPIInvoiceEndpointURL({invoiceNumber, orderNumber}),
+    {
+      ...fetchConfig.requestInit,
+      referrer: getTargetOrderInvoiceBrowserURL({invoiceNumber, orderNumber})
+        .url,
+    },
+  );
+
+  const responseJson = await getJSONNoThrow(apiResponse);
+
+  if (!isJsObject(responseJson)) {
+    const message =
+      '[getTargetAPIOrderIndividualInvoiceDataFromAPI] responseJson is not an object. This should not happen';
+    console.warn(message, {responseJson});
+    throw new Error(message);
+  }
+
+  if (
+    'code' in responseJson &&
+    responseJson['code'] === TARGET_RESOURCE_NOT_FOUND_CODE
+  ) {
+    console.log(
+      '[getTargetAPIOrderIndividualInvoiceDataFromAPI] Target API reports resource not found. This can happen when an order was cancelled without any charges/refunds, or when an order is still processing.',
+      responseJson,
+    );
+    return null;
+  }
+
+  const invoiceData = InvoiceDetailZod.parse(responseJson);
+
+  return invoiceData;
+}
+
+/**
+ * Individual Invoice Data: The detailed data for a specific invoice
+ */
+export async function deprecated__getTargetAPIOrderIndividualInvoiceDataFromBrowser({
   orderNumber,
   invoiceNumber,
   page,
@@ -277,7 +345,7 @@ export async function getTargetAPIOrderIndividualInvoiceData({
   orderNumber: string;
   page: Page;
 }): Promise<unknown> {
-  const {url: invoiceURL, path: invoicePath} = getTargetOrderInvoiceURL({
+  const {url: invoiceURL, path: invoicePath} = getTargetOrderInvoiceBrowserURL({
     invoiceNumber,
     orderNumber,
   });
@@ -334,16 +402,13 @@ export async function getTargetAPIOrderIndividualInvoiceData({
 /**
  * All Invoice Data: Gets all the invoice data for a given orderNumber
  */
-export async function getTargetAPIOrderAllInvoiceData({
+export async function getTargetAPIOrderAllInvoiceDataFromAPI({
   orderNumber,
-  page,
   fetchConfig,
 }: {
-  context: BrowserContext;
   fetchConfig: FetchConfigWithResponse;
   orderNumber: string;
-  page: Page;
-}): Promise<unknown> {
+}): Promise<Array<InvoiceDetail | null>> {
   console.log('Getting invoice overview data for order:', orderNumber);
 
   const invoiceOverviewData = await getTargetAPIOrderInvoiceOverviewDataFromAPI(
@@ -360,28 +425,18 @@ export async function getTargetAPIOrderAllInvoiceData({
     return [];
   }
 
-  const invoiceDataGetters = invoiceOverviewData.map(
-    (invoiceOverviewItem) => async (pageForIndividualData: Page) => {
-      console.log(
-        `Getting individual invoice data for order ${orderNumber} and invoice ${invoiceOverviewItem['id']}...`,
-      );
-      const data = await getTargetAPIOrderIndividualInvoiceData({
-        invoiceNumber: invoiceOverviewItem['id'],
-        orderNumber,
-        page: pageForIndividualData,
-      });
+  const invoiceData = invoiceOverviewData.map(async (invoiceOverviewItem) => {
+    console.log(
+      `Getting individual invoice data for order ${orderNumber} and invoice ${invoiceOverviewItem['id']}...`,
+    );
+    const invoiceDetail = getTargetAPIOrderIndividualInvoiceDataFromAPI({
+      fetchConfig,
+      invoiceNumber: invoiceOverviewItem['id'],
+      orderNumber,
+    });
 
-      return data;
-    },
-  );
+    return invoiceDetail;
+  });
 
-  const invoiceData: unknown[] = [];
-
-  // Do the invoices in serial on the same page to avoid anti-blocking measures
-  // Keep using the same page for all the individual invoice data
-  for (const invoiceDataGetter of invoiceDataGetters) {
-    invoiceData.push(await invoiceDataGetter(page));
-  }
-
-  return invoiceData;
+  return Promise.all(invoiceData);
 }

@@ -12,7 +12,7 @@ import {
 } from './Files';
 import {getNewBrowser} from './Setup';
 import {
-  getTargetAPIOrderAllInvoiceData,
+  getTargetAPIOrderAllInvoiceDataFromAPI,
   getTargetAPIOrderHistoryDataFromAPI,
   getTargetAPIOrderHistoryFetchConfig,
 } from './TargetAPIData';
@@ -161,17 +161,15 @@ type OutputData = {
      */
     const orderInvoiceActionQueue: ActionQueueItem[] = orderHistoryData.map(
       (order, index) => ({
-        action: async ({page: pageForAllInvoiceData}) => {
+        action: async () => {
           console.log(
             `Creating a new page for order ${order['order_number']}...`,
           );
           // const newPage = await browser.newPage();
           console.log('Getting all order invoice data...');
-          const invoicesData = await getTargetAPIOrderAllInvoiceData({
-            context,
+          const invoicesData = await getTargetAPIOrderAllInvoiceDataFromAPI({
             fetchConfig,
             orderNumber: order['order_number'],
-            page: pageForAllInvoiceData,
           });
 
           console.log(
