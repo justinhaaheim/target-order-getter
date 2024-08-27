@@ -7,12 +7,14 @@ export function getOutputDataFilenamePrefix({
   fileNumber,
   totalFiles,
   dataType,
+  params,
 }: {
   dataType: string;
   fileNumber: number;
+  params: string;
   totalFiles: number;
 }): string {
-  return `targetOrderData__${fileNumber}-of-${totalFiles}__${dataType}`;
+  return `targetOrderData__${fileNumber}-of-${totalFiles}__${dataType}__${params}`;
 }
 
 export function writeToJSONFileWithDateTime({

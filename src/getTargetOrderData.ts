@@ -151,6 +151,7 @@ type OutputData = {
     name: getOutputDataFilenamePrefix({
       dataType: 'orderHistoryData',
       fileNumber: 1,
+      params: `${orderCount}-orders`,
       totalFiles: 2,
     }),
     timestamp: outputTimestamp,
@@ -270,6 +271,7 @@ type OutputData = {
       name: getOutputDataFilenamePrefix({
         dataType: 'invoiceAndOrderData',
         fileNumber: 2,
+        params: `${orderCount}-orders`,
         totalFiles: 2,
       }),
       timestamp: outputTimestamp,
