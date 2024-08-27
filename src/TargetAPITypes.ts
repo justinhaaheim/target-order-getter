@@ -127,7 +127,7 @@ export type TargetAPIOrderHistoryObjectArray = z.infer<
 
 export const InvoiceAndOrderDataZod = z.object({
   __orderIndex: z.number(),
-  _orderDate: z.number(),
+  _orderDate: z.number().nullable(),
   _orderNumber: z.string(),
   invoicesData: z.array(InvoiceDetailZod),
   orderHistoryData: TargetAPIOrderHistoryObjectZod,

@@ -2,6 +2,7 @@ import type {FetchConfigWithResponse} from './Helpers';
 import type {
   InvoiceDetail,
   TargetAPIInvoiceOverviewObjectArray,
+  TargetAPIOrderHistoryObjectArray,
 } from './TargetAPITypes';
 import type {Page, Response} from 'playwright';
 
@@ -15,6 +16,7 @@ import {
 } from './Constants';
 import {range} from './GeneralUtils';
 import {getFetchConfig, getJSONNoThrow, isJsObject} from './Helpers';
+import isNonNullable from './isNonNullable';
 import projectConfig from './projectConfig';
 import {
   InvoiceDetailZod,
@@ -24,12 +26,12 @@ import {
 
 const TARGET_RESOURCE_NOT_FOUND_CODE = 102;
 
-export type TargetAPIOrderHistoryItem = {
-  [key: string]: unknown;
-  order_number: string;
-  placed_date: string;
-  summary: {grand_total: string};
-};
+// export type TargetAPIOrderHistoryItem = {
+//   [key: string]: unknown;
+//   order_number: string;
+//   placed_date: string;
+//   summary: {grand_total: string};
+// };
 
 type GetTargetAPIOrderHistoryConfig = {
   // TODO: Support startDate
@@ -75,32 +77,6 @@ function getTargetAPIInvoiceEndpointURL({
   return `https://${TARGET_API_HOSTNAME}/post_order_invoices/v1/orders/${orderNumber}/invoices/${invoiceNumber}`;
 }
 
-export function isTargetOrderHistory(
-  data: unknown,
-): data is TargetAPIOrderHistoryItem[] {
-  if (!Array.isArray(data)) {
-    return false;
-  }
-  return data.every((item) => {
-    if (typeof item !== 'object') {
-      return false;
-    }
-    if (typeof item['order_number'] !== 'string') {
-      return false;
-    }
-    if (typeof item['placed_date'] !== 'string') {
-      return false;
-    }
-    if (typeof item['summary'] !== 'object') {
-      return false;
-    }
-    if (typeof item['summary']['grand_total'] !== 'string') {
-      return false;
-    }
-    return true;
-  });
-}
-
 export async function getTargetAPIOrderHistoryFetchConfig({
   page,
 }: {
@@ -119,7 +95,7 @@ export async function getTargetAPIOrderHistoryFetchConfig({
 export async function getTargetAPIOrderHistoryDataFromAPI({
   orderCount,
   fetchConfigFromInitialOrderHistoryRequest,
-}: GetTargetAPIOrderHistoryConfig): Promise<TargetAPIOrderHistoryItem[]> {
+}: GetTargetAPIOrderHistoryConfig): Promise<TargetAPIOrderHistoryObjectArray> {
   console.log('[getTargetAPIOrderHistoryData] Order count:', orderCount);
 
   const {apiURL: apiURLFromInitialRequest, requestInit} =
@@ -408,7 +384,7 @@ export async function getTargetAPIOrderAllInvoiceDataFromAPI({
 }: {
   fetchConfig: FetchConfigWithResponse;
   orderNumber: string;
-}): Promise<Array<InvoiceDetail | null>> {
+}): Promise<Array<InvoiceDetail>> {
   console.log('Getting invoice overview data for order:', orderNumber);
 
   const invoiceOverviewData = await getTargetAPIOrderInvoiceOverviewDataFromAPI(
@@ -438,5 +414,5 @@ export async function getTargetAPIOrderAllInvoiceDataFromAPI({
     return invoiceDetail;
   });
 
-  return Promise.all(invoiceData);
+  return (await Promise.all(invoiceData)).filter(isNonNullable);
 }

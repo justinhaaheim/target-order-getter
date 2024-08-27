@@ -1,4 +1,5 @@
-import type {Page, Request, Response} from 'playwright';
+import type {InvoiceAndOrderData} from './TargetAPITypes';
+import type {Request, Response} from 'playwright';
 
 import {Command} from 'commander';
 import {mkdirSync} from 'fs';
@@ -60,8 +61,8 @@ function shouldLogRequestResponse(urlString: string) {
   return true;
 }
 
-type ActionQueueItem = {
-  action: ({page}: {page: Page}) => Promise<any>;
+type ActionQueueItem<T> = {
+  action: () => Promise<T>;
   attemptsLimit: number;
   attemptsMade: number;
   id: string;
@@ -159,14 +160,12 @@ type OutputData = {
     /**
      * Get all invoice data for each order
      */
-    const orderInvoiceActionQueue: ActionQueueItem[] = orderHistoryData.map(
-      (order, index) => ({
+    const orderInvoiceActionQueue: Array<ActionQueueItem<InvoiceAndOrderData>> =
+      orderHistoryData.map((order, index) => ({
         action: async () => {
           console.log(
-            `Creating a new page for order ${order['order_number']}...`,
+            `Getting all order invoice data for order ${order['order_number']}...`,
           );
-          // const newPage = await browser.newPage();
-          console.log('Getting all order invoice data...');
           const invoicesData = await getTargetAPIOrderAllInvoiceDataFromAPI({
             fetchConfig,
             orderNumber: order['order_number'],
@@ -198,8 +197,7 @@ type OutputData = {
         id: `${
           order['order_number'] ?? `NO_ORDER_NUMBER-${uuidv4()}`
         }-${index}-invoiceAction`,
-      }),
-    );
+      }));
 
     const combinedOrderData: Array<unknown> = [];
     let actionRunCount = 0;
@@ -229,7 +227,7 @@ type OutputData = {
             currentAction.attemptsMade + 1
           }/${currentAction.attemptsLimit})...`,
         );
-        const orderData = await currentAction.action({page: mainPage});
+        const orderData = await currentAction.action();
         console.debug(`Action ${currentAction.id} completed successfully.`);
         combinedOrderData.push(orderData);
         console.debug(`Action ${currentAction.id} data pushed.`);
