@@ -1,4 +1,4 @@
-import type {InvoiceAndOrderData} from './TargetAPITypes';
+import type {InvoiceOrderAndAggregationsData} from './TargetAPITypes';
 import type {Request, Response} from 'playwright';
 
 import {Command} from 'commander';
@@ -13,6 +13,7 @@ import {
 } from './Files';
 import {getNewBrowser} from './Setup';
 import {
+  getTargetAPIOrderAggregationsDataFromAPI,
   getTargetAPIOrderAllInvoiceDataFromAPI,
   getTargetAPIOrderHistoryDataFromAPI,
   getTargetAPIOrderHistoryFetchConfig,
@@ -160,44 +161,52 @@ type OutputData = {
     /**
      * Get all invoice data for each order
      */
-    const orderInvoiceActionQueue: Array<ActionQueueItem<InvoiceAndOrderData>> =
-      orderHistoryData.map((order, index) => ({
-        action: async () => {
-          console.log(
-            `Getting all order invoice data for order ${order['order_number']}...`,
-          );
-          const invoicesData = await getTargetAPIOrderAllInvoiceDataFromAPI({
+    const orderInvoiceActionQueue: Array<
+      ActionQueueItem<InvoiceOrderAndAggregationsData>
+    > = orderHistoryData.map((order, index) => ({
+      action: async (): Promise<InvoiceOrderAndAggregationsData> => {
+        console.log(
+          `Getting all order invoice data for order ${order['order_number']}...`,
+        );
+        const invoicesData = await getTargetAPIOrderAllInvoiceDataFromAPI({
+          fetchConfig,
+          orderNumber: order['order_number'],
+        });
+
+        const orderAggregationsData =
+          await getTargetAPIOrderAggregationsDataFromAPI({
             fetchConfig,
             orderNumber: order['order_number'],
           });
 
-          console.log(
-            `Got order invoice data for order ${
-              order['order_number'] ?? 'NO_ORDER_NUMBER'
-            }...`,
-          );
+        console.log(
+          `Got order invoice data for order ${
+            order['order_number'] ?? 'NO_ORDER_NUMBER'
+          }...`,
+        );
 
-          // newPage.close();
+        // newPage.close();
 
-          const orderDateString = order['placed_date'];
+        const orderDateString = order['placed_date'];
 
-          return {
-            __orderIndex: index,
-            _orderDate:
-              orderDateString == null || orderDateString.length === 0
-                ? null
-                : new Date(orderDateString).valueOf(),
-            _orderNumber: order['order_number'],
-            invoicesData: invoicesData,
-            orderHistoryData: order,
-          };
-        },
-        attemptsLimit: RETRY_ATTEMPTS_LIMIT,
-        attemptsMade: 0,
-        id: `${
-          order['order_number'] ?? `NO_ORDER_NUMBER-${uuidv4()}`
-        }-${index}-invoiceAction`,
-      }));
+        return {
+          __orderIndex: index,
+          _orderDate:
+            orderDateString == null || orderDateString.length === 0
+              ? null
+              : new Date(orderDateString).valueOf(),
+          _orderNumber: order['order_number'],
+          invoicesData: invoicesData,
+          orderAggregationsData: orderAggregationsData,
+          orderHistoryData: order,
+        };
+      },
+      attemptsLimit: RETRY_ATTEMPTS_LIMIT,
+      attemptsMade: 0,
+      id: `${
+        order['order_number'] ?? `NO_ORDER_NUMBER-${uuidv4()}`
+      }-${index}-invoiceAction`,
+    }));
 
     const combinedOrderData: Array<unknown> = [];
     let actionRunCount = 0;

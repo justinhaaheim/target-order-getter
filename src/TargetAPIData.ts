@@ -2,6 +2,7 @@ import type {FetchConfigWithResponse} from './Helpers';
 import type {
   InvoiceDetail,
   TargetAPIInvoiceOverviewObjectArray,
+  TargetAPIOrderAggregationsData,
   TargetAPIOrderHistoryObjectArray,
 } from './TargetAPITypes';
 import type {Page, Response} from 'playwright';
@@ -21,6 +22,7 @@ import projectConfig from './projectConfig';
 import {
   InvoiceDetailZod,
   TargetAPIInvoiceOverviewObjectArrayZod,
+  TargetAPIOrderAggregationsDataZod,
   TargetAPIOrderHistoryObjectArrayZod,
 } from './TargetAPITypes';
 
@@ -75,6 +77,10 @@ function getTargetAPIInvoiceEndpointURL({
   orderNumber: string;
 }): string {
   return `https://${TARGET_API_HOSTNAME}/post_order_invoices/v1/orders/${orderNumber}/invoices/${invoiceNumber}`;
+}
+
+function getTargetAPIOrderAggregationsEndpointURL(orderNumber: string): string {
+  return `https://${TARGET_API_HOSTNAME}/guest_order_aggregations/v1/${orderNumber}?pending_order=true&shipt_status=true`;
 }
 
 export async function getTargetAPIOrderHistoryFetchConfig({
@@ -181,23 +187,6 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
 
   // NOTE: We will often be fetching more orders than we need, but for clarity let's only return the amount requested
   return orderDataTyped.slice(0, orderCount);
-}
-
-export async function getTargetAPIOrderInvoiceOverviewDataFetchConfig({
-  orderNumber,
-  page,
-}: {
-  orderNumber: string;
-  page: Page;
-}): Promise<FetchConfigWithResponse> {
-  const invoiceOverviewURL =
-    getTargetOrderInvoiceOverviewBrowserURL(orderNumber);
-
-  return await getFetchConfig({
-    browserURL: invoiceOverviewURL,
-    endpointURLToWatch: getTargetAPIInvoiceOverviewEndpointURL(orderNumber),
-    page,
-  });
 }
 
 /**
@@ -307,6 +296,40 @@ export async function getTargetAPIOrderIndividualInvoiceDataFromAPI({
   const invoiceData = InvoiceDetailZod.parse(responseJson);
 
   return invoiceData;
+}
+
+/**
+ * Order Aggregations Data - contains item categorization information
+ */
+export async function getTargetAPIOrderAggregationsDataFromAPI({
+  fetchConfig,
+  orderNumber,
+}: {
+  fetchConfig: FetchConfigWithResponse;
+  orderNumber: string;
+}): Promise<TargetAPIOrderAggregationsData> {
+  const apiResponse = await fetch(
+    getTargetAPIOrderAggregationsEndpointURL(orderNumber),
+    {
+      ...fetchConfig.requestInit,
+      referrer: getTargetOrderBrowserURL(orderNumber),
+    },
+  );
+
+  const responseJson = await getJSONNoThrow(apiResponse);
+
+  if (!isJsObject(responseJson)) {
+    const message =
+      '[getTargetAPIOrderAggregationsDataFromAPI] responseJson is not an object. This should not happen';
+    console.warn(message, {responseJson});
+    throw new Error(message);
+  }
+
+  // NOTE: we're intentionally not using passthrough here in order to limit the amount of extraneous data we end up keeping
+  const orderAggregationsData =
+    TargetAPIOrderAggregationsDataZod.parse(responseJson);
+
+  return orderAggregationsData;
 }
 
 /**
