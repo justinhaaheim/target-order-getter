@@ -1,3 +1,4 @@
+import type {RateLimiterFunction} from './CustomRateLimiter';
 import type {FetchConfigWithResponse} from './Helpers';
 import type {
   InvoiceDetail,
@@ -7,7 +8,6 @@ import type {
 } from './TargetAPITypes';
 import type {Page, Response} from 'playwright';
 
-import {RateLimit} from 'async-sema';
 import nullthrows from 'nullthrows';
 
 import {
@@ -18,7 +18,6 @@ import {
 import {range} from './GeneralUtils';
 import {getFetchConfig, getJSONNoThrow, isJsObject} from './Helpers';
 import isNonNullable from './isNonNullable';
-import projectConfig from './projectConfig';
 import {
   InvoiceDetailZod,
   TargetAPIInvoiceOverviewObjectArrayZod,
@@ -40,6 +39,7 @@ type GetTargetAPIOrderHistoryConfig = {
   fetchConfigFromInitialOrderHistoryRequest: FetchConfigWithResponse;
   orderCount: number;
   page: Page;
+  rateLimiter: RateLimiterFunction;
 };
 
 type ResponseListener = (response: Response) => any;
@@ -100,6 +100,7 @@ export async function getTargetAPIOrderHistoryFetchConfig({
  */
 export async function getTargetAPIOrderHistoryDataFromAPI({
   orderCount,
+  rateLimiter,
   fetchConfigFromInitialOrderHistoryRequest,
 }: GetTargetAPIOrderHistoryConfig): Promise<TargetAPIOrderHistoryObjectArray> {
   console.log('[getTargetAPIOrderHistoryData] Order count:', orderCount);
@@ -120,11 +121,6 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
 
   const pagesRequiredForOrderCount = Math.ceil(orderCount / initialPageSize);
   const pageNumbersToFetch = range(1, pagesRequiredForOrderCount + 1);
-
-  const rateLimiter = RateLimit(projectConfig.requestRateLimiter.rps, {
-    timeUnit: projectConfig.requestRateLimiter.timeUnit, // milliseconds
-    uniformDistribution: true,
-  });
 
   const pages = await Promise.all(
     pageNumbersToFetch.map(async (pageNumberToFetch) => {

@@ -7,10 +7,12 @@ import {v4 as uuidv4} from 'uuid';
 
 import {playwrightAuthContextOptions, playwrightAuthFilePath} from './Auth';
 import {TARGET_ORDER_PAGE_URL} from './Constants';
+import {CustomRateLimiter} from './CustomRateLimiter';
 import {
   getOutputDataFilenamePrefix,
   writeToJSONFileWithDateTime,
 } from './Files';
+import projectConfig from './projectConfig';
 import {getNewBrowser} from './Setup';
 import {
   getTargetAPIOrderAggregationsDataFromAPI,
@@ -95,6 +97,11 @@ type OutputData = {
     browserContextOptions: playwrightAuthContextOptions,
   });
 
+  const rateLimiter = CustomRateLimiter(projectConfig.requestRateLimiter.rps, {
+    timeUnit: projectConfig.requestRateLimiter.timeUnit, // milliseconds
+    uniformDistribution: true,
+  });
+
   // Subscribe to 'request' and 'response' events.
   mainPage.on(
     'request',
@@ -129,6 +136,7 @@ type OutputData = {
     fetchConfigFromInitialOrderHistoryRequest: fetchConfig,
     orderCount,
     page: mainPage,
+    rateLimiter,
   });
 
   /**
