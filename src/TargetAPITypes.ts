@@ -183,6 +183,6 @@ export const OutputDataZod = z.object({
 export type OutputData = z.infer<typeof OutputDataZod>;
 
 export const CombinedOutputDataZod = OutputDataZod.extend({
-  invoiceAndOrderData: z.array(InvoiceAndOrderDataZod),
+  invoiceAndOrderData: z.array(InvoiceOrderAndAggregationsDataZod),
 });
 export type CombinedOutputData = z.infer<typeof CombinedOutputDataZod>;
