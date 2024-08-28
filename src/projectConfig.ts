@@ -1,7 +1,7 @@
 const projectConfig = {
   requestRateLimiter: {
     rps: 1,
-    timeUnit: 500, // ms
+    timeUnit: 2500, // ms
   },
 } as const;
 

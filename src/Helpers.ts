@@ -1,4 +1,7 @@
+import type {ActionQueueItem} from './getTargetOrderData';
+import type {InvoiceOrderAndAggregationsData} from './TargetAPITypes';
 import type {Page, Request, Response as PlaywrightResponse} from 'playwright';
+import type Queue from 'yocto-queue';
 
 type LoadMoreConfig = {
   orderCount: number;
@@ -170,4 +173,54 @@ export async function loadMoreOrdersUntilOrderCount({
   }
 
   console.log(`Finished loading ${currentOrderCount} orders`);
+}
+
+export async function actionQueueWrapperFn({
+  action,
+  combinedOrderData,
+  kickoffNextAction,
+  queue,
+}: {
+  action: ActionQueueItem<InvoiceOrderAndAggregationsData>;
+  combinedOrderData: unknown[];
+  kickoffNextAction: () => Promise<void>;
+  queue: Queue<() => Promise<void>>;
+}): Promise<void> {
+  if (action.attemptsMade >= action.attemptsLimit) {
+    console.log(
+      `Action ${action.id} has already made ${action.attemptsMade}/${action.attemptsLimit} attempts. Skipping.`,
+    );
+    return;
+  }
+
+  try {
+    console.log(
+      `🟢 Initiating action ${action.id} (attempt ${action.attemptsMade + 1}/${
+        action.attemptsLimit
+      })...`,
+    );
+    const orderData = await action.action();
+    console.debug(`Action ${action.id} completed successfully.`);
+    combinedOrderData.push(orderData);
+    console.debug(`Action ${action.id} data pushed.`);
+  } catch (error) {
+    console.warn(`Action ${action.id} threw the following error:`);
+    console.warn(error);
+
+    if (action.attemptsMade + 1 < action.attemptsLimit) {
+      // Queue the action to retry right away. Running these actions in their original order may have some advantages in terms of clarity.
+      console.debug(`Re-queuing action ${action.id}...`);
+      queue.enqueue(async () =>
+        // Do not await it here. We just want to add it to the event loop
+        actionQueueWrapperFn({
+          action: {...action, attemptsMade: action.attemptsMade + 1},
+          combinedOrderData,
+          kickoffNextAction,
+          queue,
+        }),
+      );
+    }
+  } finally {
+    kickoffNextAction();
+  }
 }
