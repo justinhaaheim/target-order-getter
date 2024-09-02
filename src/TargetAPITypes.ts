@@ -30,14 +30,6 @@ const InvoiceLinesObject = z.object({
   unit_price: z.number(), // how much each item costs
 });
 
-/**
- * Instead, if you want to pass through unknown keys, use .passthrough() .
- * 
- * person.passthrough().parse({
-  name: "bob dylan",
-  extraKey: 61,
-});
- */
 export const InvoiceDetailZod = z.object({
   date: z.coerce.date(), // "2024-08-17T19:05:52.000Z"
   // date: z.string(), // "2024-08-18T20:41:55.000Z",
@@ -101,6 +93,7 @@ export const TargetAPIOrderHistoryObjectZod = z.object({
   summary: z.object({
     grand_total: z.string(), // Strange this isn't a number
   }),
+  tenant_key: z.string(), // "Target.com"
 });
 
 export type TargetAPIOrderHistoryObject = z.infer<
@@ -121,12 +114,15 @@ export type TargetAPIOrderHistoryObjectArray = z.infer<
 
 const TargetAPIOrderAggregationsOrderLinesItemFullZod =
   TargetAPIBaseItemZod.extend({
-    product_classification: z.object({
-      merchandise_type_name: z.string().optional(), // "Oral Care"
-      // I'm not sure if these are optional or not, but let's assume they are
-      product_subtype_name: z.string().optional(), // "BEVERAGE"
-      product_type_name: z.string().optional(), // "GROCERY"
-    }),
+    // I saw one case where this wasn't present for some reason, so let's consider it optional
+    product_classification: z.optional(
+      z.object({
+        merchandise_type_name: z.string().optional(), // "Oral Care"
+        // I'm not sure if these are optional or not, but let's assume they are
+        product_subtype_name: z.string().optional(), // "BEVERAGE"
+        product_type_name: z.string().optional(), // "GROCERY"
+      }),
+    ),
   });
 
 const TargetAPIOrderAggregationsOrderLinesObjectZod =
@@ -166,15 +162,20 @@ export type InvoiceOrderAndAggregationsData = z.infer<
   typeof InvoiceOrderAndAggregationsDataZod
 >;
 
-export const OutputDataZod = z.object({
+export const OutputDataBaseZod = z.object({
   _createdTimestamp: z.number(),
   _params: z.object({
     orderCount: z.number(),
   }),
 });
-export type OutputData = z.infer<typeof OutputDataZod>;
+export type OutputDataBase = z.infer<typeof OutputDataBaseZod>;
 
-export const CombinedOutputDataZod = OutputDataZod.extend({
+export const OrderHistoryOutputDataZod = OutputDataBaseZod.extend({
+  orderHistoryData: TargetAPIOrderHistoryObjectArrayZod,
+});
+export type OrderHistoryOutputData = z.infer<typeof OrderHistoryOutputDataZod>;
+
+export const CombinedOutputDataZod = OutputDataBaseZod.extend({
   invoiceAndOrderData: z.array(InvoiceOrderAndAggregationsDataZod),
 });
 export type CombinedOutputData = z.infer<typeof CombinedOutputDataZod>;

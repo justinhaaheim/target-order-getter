@@ -1,4 +1,4 @@
-import {writeFileSync} from 'node:fs';
+import {mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 
 import {getDateTimeString} from './DateUtils';
@@ -28,6 +28,9 @@ export function writeToJSONFileWithDateTime({
   name: string;
   timestamp: Date;
 }): void {
+  // Create the dir if it doesn't exist
+  mkdirSync(basePath, {recursive: true});
+
   const fileName = `${getDateTimeString(timestamp)}__${name}.json`;
 
   const filePath = path.join(basePath, fileName);

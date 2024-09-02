@@ -178,8 +178,19 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
 
   // Throws if the data is not in the expected format
   // Because our type has a union with Record<string, unknown>, any keys we haven't specifically typed will still pass through
-  const orderDataTyped = TargetAPIOrderHistoryObjectArrayZod.parse(orderData);
-  console.log('✅ Order history data successfully parsed/validated');
+  const parseResult = TargetAPIOrderHistoryObjectArrayZod.safeParse(orderData);
+
+  if (!parseResult.success) {
+    console.error(
+      `[getTargetAPIOrderHistoryDataFromAPI] Server response doesn't match expected schema. We'll try to recover anyway.`,
+      parseResult.error,
+    );
+  } else {
+    console.log('✅ Order history data successfully parsed/validated');
+  }
+
+  // We know that this may contain keys that are not in our schema, but we'll strip those out later
+  const orderDataTyped = orderData as TargetAPIOrderHistoryObjectArray;
 
   // NOTE: We will often be fetching more orders than we need, but for clarity let's only return the amount requested
   return orderDataTyped.slice(0, orderCount);
@@ -231,15 +242,27 @@ export async function getTargetAPIOrderInvoiceOverviewDataFromAPI({
     );
   }
 
-  const invoices = TargetAPIInvoiceOverviewObjectArrayZod.parse(
-    responseJson['invoices'],
-  );
+  const invoicesFromResponse = responseJson['invoices'];
 
-  if (invoices.length === 0) {
-    throw new Error(
-      '[getTargetAPIOrderInvoiceOverviewDataFromAPI] Invoice overview API returned no invoices. This should not happen. If there are no invoices, the endpoint just returns an error code.',
+  const parseResult =
+    TargetAPIInvoiceOverviewObjectArrayZod.nonempty().safeParse(
+      invoicesFromResponse,
+    );
+
+  if (!parseResult.success) {
+    console.error(
+      `[getTargetAPIOrderInvoiceOverviewDataFromAPI] Server response doesn't match expected schema. We'll try to recover anyway.`,
+      parseResult.error,
     );
   }
+
+  const invoices = invoicesFromResponse as TargetAPIInvoiceOverviewObjectArray;
+
+  // if (invoices.length === 0) {
+  //   throw new Error(
+  //     '[getTargetAPIOrderInvoiceOverviewDataFromAPI] Invoice overview API returned no invoices. This should not happen. If there are no invoices, the endpoint just returns an error code.',
+  //   );
+  // }
 
   console.log(
     `Received invoice overview data for: ${invoices.length} invoice(s) for order ${orderNumber}`,
@@ -289,9 +312,16 @@ export async function getTargetAPIOrderIndividualInvoiceDataFromAPI({
     return null;
   }
 
-  const invoiceData = InvoiceDetailZod.parse(responseJson);
+  const parseResult = InvoiceDetailZod.safeParse(responseJson);
 
-  return invoiceData;
+  if (!parseResult.success) {
+    console.error(
+      `[getTargetAPIOrderIndividualInvoiceDataFromAPI] Server response doesn't match expected schema. We'll try to recover anyway.`,
+      parseResult.error,
+    );
+  }
+
+  return responseJson as InvoiceDetail;
 }
 
 /**
@@ -322,10 +352,18 @@ export async function getTargetAPIOrderAggregationsDataFromAPI({
   }
 
   // NOTE: we're intentionally not using passthrough here in order to limit the amount of extraneous data we end up keeping
-  const orderAggregationsData =
-    TargetAPIOrderAggregationsDataZod.parse(responseJson);
+  const parseResult = TargetAPIOrderAggregationsDataZod.safeParse(responseJson);
 
-  return orderAggregationsData;
+  if (!parseResult.success) {
+    console.error(
+      `[getTargetAPIOrderAggregationsDataFromAPI] Server response doesn't match expected schema. We'll try to recover anyway.`,
+      parseResult.error,
+    );
+  }
+
+  // Let's return all the data we get from the server, even if it doesn't match our schema.
+  // We'll strip out the keys that don't show up in our schema later.
+  return responseJson as TargetAPIOrderAggregationsData;
 }
 
 /**

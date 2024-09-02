@@ -1,8 +1,11 @@
-import type {InvoiceOrderAndAggregationsData} from './TargetAPITypes';
+import type {
+  CombinedOutputData,
+  InvoiceOrderAndAggregationsData,
+  OrderHistoryOutputData,
+} from './TargetAPITypes';
 import type {Request, Response} from 'playwright';
 
 import {Command} from 'commander';
-import {mkdirSync} from 'fs';
 import {v4 as uuidv4} from 'uuid';
 import Queue from 'yocto-queue';
 
@@ -22,6 +25,12 @@ import {
   getTargetAPIOrderHistoryDataFromAPI,
   getTargetAPIOrderHistoryFetchConfig,
 } from './TargetAPIData';
+import {
+  CombinedOutputDataZod,
+  OrderHistoryOutputDataZod,
+} from './TargetAPITypes';
+
+type OutputTypes = 'Full' | 'Pruned';
 
 const program = new Command();
 
@@ -37,6 +46,10 @@ const orderCount = parseInt(cliOptions['orderCount']);
 const skipInvoiceData: boolean = cliOptions['skipInvoiceData'];
 
 const OUTPUT_DIR = 'output';
+const ORDER_HISTORY_TYPES_TO_OUTPUT: OutputTypes[] = ['Full', 'Pruned'];
+const COMBINED_OUTPUT_TYPES_TO_OUTPUT: OutputTypes[] = ['Full', 'Pruned'];
+const TOTAL_OUTPUT_FILE_COUNT =
+  ORDER_HISTORY_TYPES_TO_OUTPUT.length + COMBINED_OUTPUT_TYPES_TO_OUTPUT.length;
 
 const TIMEOUT_FOR_INITIAL_AUTHENTICATION = 120 * 1000;
 
@@ -69,14 +82,6 @@ export type ActionQueueItem<T> = {
   attemptsLimit: number;
   attemptsMade: number;
   id: string;
-};
-
-type OutputData = {
-  [key: string]: unknown;
-  _createdTimestamp: number;
-  _params: {
-    orderCount: number;
-  };
 };
 
 // const DEV_ONLY_ORDER_LIMIT = 5;
@@ -143,26 +148,46 @@ type OutputData = {
    * Output the order history data to a file before proceeding in case the remainder fails
    */
   const outputTimestamp = new Date();
+  let fileOutputNumber = 1;
 
-  // Create the dir if it doesn't exist
-  mkdirSync(OUTPUT_DIR, {recursive: true});
+  ORDER_HISTORY_TYPES_TO_OUTPUT.forEach((outputType) => {
+    const outputDataOrderHistoryFull: OrderHistoryOutputData = {
+      _createdTimestamp: outputTimestamp.valueOf(),
+      _params: {orderCount},
+      orderHistoryData: orderHistoryData,
+    };
 
-  const outputDataOrderHistory: OutputData = {
-    _createdTimestamp: outputTimestamp.valueOf(),
-    _params: {orderCount},
-    orderHistoryData: orderHistoryData,
-  };
+    let outputDataOrderHistory = outputDataOrderHistoryFull;
 
-  writeToJSONFileWithDateTime({
-    basePath: OUTPUT_DIR,
-    data: outputDataOrderHistory,
-    name: getOutputDataFilenamePrefix({
-      dataType: 'orderHistoryData',
-      fileNumber: 1,
-      params: `${orderCount}-orders`,
-      totalFiles: 2,
-    }),
-    timestamp: outputTimestamp,
+    if (outputType === 'Pruned') {
+      const parseResult = OrderHistoryOutputDataZod.safeParse(
+        outputDataOrderHistoryFull,
+      );
+
+      if (!parseResult.success) {
+        console.error(
+          'Failed to prune order history data before writing to file. Skipping.',
+          parseResult.error,
+        );
+        return;
+      } else {
+        outputDataOrderHistory = parseResult.data;
+      }
+    }
+
+    writeToJSONFileWithDateTime({
+      basePath: OUTPUT_DIR,
+      data: outputDataOrderHistory,
+      name: getOutputDataFilenamePrefix({
+        dataType: `orderHistoryData${outputType}`,
+        fileNumber: fileOutputNumber,
+        params: `${orderCount}-orders`,
+        totalFiles: TOTAL_OUTPUT_FILE_COUNT,
+      }),
+      timestamp: outputTimestamp,
+    });
+
+    fileOutputNumber += 1;
   });
 
   if (!skipInvoiceData && orderHistoryData.length > 0) {
@@ -227,7 +252,7 @@ type OutputData = {
       }-${index}-invoiceAction`,
     }));
 
-    const combinedOrderData: Array<unknown> = [];
+    const combinedOrderData: Array<InvoiceOrderAndAggregationsData> = [];
     // let actionRunCount = 0;
 
     const actionQueueCompletePromiseFunctions: {
@@ -279,22 +304,44 @@ type OutputData = {
     /**
      * Output the combined order data to a file
      */
-    const combinedOutputData: OutputData = {
-      _createdTimestamp: outputTimestamp.valueOf(),
-      _params: {orderCount},
-      invoiceAndOrderData: combinedOrderData,
-    };
+    COMBINED_OUTPUT_TYPES_TO_OUTPUT.forEach((outputType) => {
+      const combinedOutputDataFull: CombinedOutputData = {
+        _createdTimestamp: outputTimestamp.valueOf(),
+        _params: {orderCount},
+        invoiceAndOrderData: combinedOrderData,
+      };
 
-    writeToJSONFileWithDateTime({
-      basePath: 'output/',
-      data: combinedOutputData,
-      name: getOutputDataFilenamePrefix({
-        dataType: 'invoiceAndOrderData',
-        fileNumber: 2,
-        params: `${orderCount}-orders`,
-        totalFiles: 2,
-      }),
-      timestamp: outputTimestamp,
+      let combinedOutputData = combinedOutputDataFull;
+
+      if (outputType === 'Pruned') {
+        const parseResult = CombinedOutputDataZod.safeParse(
+          combinedOutputDataFull,
+        );
+
+        if (!parseResult.success) {
+          console.error(
+            'Failed to prune combined order and invoice data before writing to file. Skipping.',
+            parseResult.error,
+          );
+          return;
+        } else {
+          combinedOutputData = parseResult.data;
+        }
+      }
+
+      writeToJSONFileWithDateTime({
+        basePath: 'output/',
+        data: combinedOutputData,
+        name: getOutputDataFilenamePrefix({
+          dataType: `invoiceAndOrderData${outputType}`,
+          fileNumber: fileOutputNumber,
+          params: `${orderCount}-orders`,
+          totalFiles: TOTAL_OUTPUT_FILE_COUNT,
+        }),
+        timestamp: outputTimestamp,
+      });
+
+      fileOutputNumber += 1;
     });
   } else {
     console.log('Skipping invoice data...');
