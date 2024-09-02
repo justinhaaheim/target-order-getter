@@ -53,19 +53,13 @@ export const InvoiceDetailZod = z.object({
 
 export type InvoiceDetail = z.infer<typeof InvoiceDetailZod>;
 
-export const TargetAPIInvoiceOverviewObjectZod =
-  // z.record(z.unknown()).and(
-  z
-    .object({
-      amount: z.number(),
-      date: z.coerce.date(), // "2024-08-17T19:05:52.000Z"
-      id: z.string(),
-      receipt_id: z.string(),
-      type: z.string(), // "SHIPMENT"
-    })
-    // TODO: Decide if passthrough is the right way to handle this
-    .passthrough();
-// );
+export const TargetAPIInvoiceOverviewObjectZod = z.object({
+  amount: z.number(),
+  date: z.coerce.date(), // "2024-08-17T19:05:52.000Z"
+  id: z.string(),
+  receipt_id: z.string(),
+  type: z.string(), // "SHIPMENT"
+});
 
 export type TargetAPIInvoiceOverviewObject = z.infer<
   typeof TargetAPIInvoiceOverviewObjectZod
@@ -98,18 +92,16 @@ const TargetAPIOrderLinesObjectZod = z.object({
 
 // Originally this was export const targetAPIOrderHistoryItemSchema = z.record(z.unknown()).and( ...
 // which lets in any arbitrary keys.
-export const TargetAPIOrderHistoryObjectZod = z.record(z.unknown()).and(
-  z.object({
-    // address: (store address) ...
-    order_lines: z.array(TargetAPIOrderLinesObjectZod),
-    order_number: z.string(),
-    order_purchase_type: z.string(), // "ONLINE"
-    placed_date: z.string(), // "2024-08-17T12:58:39-05:00",
-    summary: z.object({
-      grand_total: z.string(), // Strange this isn't a number
-    }),
+export const TargetAPIOrderHistoryObjectZod = z.object({
+  // address: (store address) ...
+  order_lines: z.array(TargetAPIOrderLinesObjectZod),
+  order_number: z.string(),
+  order_purchase_type: z.string(), // "ONLINE"
+  placed_date: z.string(), // "2024-08-17T12:58:39-05:00",
+  summary: z.object({
+    grand_total: z.string(), // Strange this isn't a number
   }),
-);
+});
 
 export type TargetAPIOrderHistoryObject = z.infer<
   typeof TargetAPIOrderHistoryObjectZod
