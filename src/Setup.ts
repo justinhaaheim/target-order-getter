@@ -5,7 +5,8 @@ import type {
   Page,
 } from 'playwright';
 
-import {chromium, devices} from 'playwright';
+import {chromium, devices} from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 
 import {getIsAuthFileCookieStillValid, playwrightAuthFilePath} from './Auth';
 import {TARGET_ORDER_PAGE_URL} from './Constants';
@@ -13,6 +14,8 @@ import {TARGET_ORDER_PAGE_URL} from './Constants';
 type GetNewBrowserConfig = {
   browserContextOptions?: BrowserContextOptions;
 };
+
+chromium.use(StealthPlugin());
 
 export async function canNavigateToURL(
   url: string,
