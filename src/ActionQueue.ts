@@ -22,6 +22,12 @@ type ActionQueueReturnType<OutputDataType> = {
   startQueue: () => void;
 };
 
+/**
+ * TODO: Make this run in parallel rather than serial
+ *
+ * @param actionQueueConfig
+ * @returns
+ */
 export function getNewActionQueue<OutputDataType>(
   actionQueueConfig: ActionQueueConfig,
 ): ActionQueueReturnType<OutputDataType> {
@@ -51,6 +57,8 @@ export function getNewActionQueue<OutputDataType>(
    * Simply dequeues the next item and adds it to the event loop queue (without awaiting).
    *
    * When the queue is empty it resolves the actionQueueCompletePromise
+   * NOTE: This means that the queue will always resolve when empty.
+   *
    */
   const kickoffNextAction = async () => {
     console.debug(
@@ -132,6 +140,7 @@ export function getNewActionQueue<OutputDataType>(
         id: `action-${actionIDCounter++}--${idSuffix}`,
       });
     });
+    // TODO: Kickoff next action here too? Otherwise we could have a situation where an action is queued but not run
   };
 
   return {

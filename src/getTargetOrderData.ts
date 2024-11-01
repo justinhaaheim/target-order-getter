@@ -8,8 +8,8 @@ import type {Request, Response} from 'playwright';
 import {Command} from '@commander-js/extra-typings';
 import nullthrows from 'nullthrows';
 import {v4 as uuidv4} from 'uuid';
-import Queue from 'yocto-queue';
 
+import {getNewActionQueue} from './ActionQueue';
 import {playwrightAuthContextOptions, playwrightAuthFilePath} from './Auth';
 import {TARGET_ORDER_PAGE_URL} from './Constants';
 import {CustomRateLimiter} from './CustomRateLimiter';
@@ -18,7 +18,6 @@ import {
   getOutputDataFilenamePrefix,
   writeToJSONFileWithDateTime,
 } from './Files';
-import {actionQueueWrapperFn} from './Helpers';
 import projectConfig from './projectConfig';
 import {getNewBrowser} from './Setup';
 import {
@@ -91,13 +90,6 @@ function shouldLogRequestResponse(urlString: string) {
 
   return true;
 }
-
-export type ActionQueueItem<T> = {
-  action: () => Promise<T>;
-  attemptsLimit: number;
-  attemptsMade: number;
-  id: string;
-};
 
 // const DEV_ONLY_ORDER_LIMIT = 5;
 
@@ -215,13 +207,16 @@ export type ActionQueueItem<T> = {
 
     // })
 
+    const {actionQueueCompletePromise, enqueueAction, startQueue} =
+      getNewActionQueue<InvoiceOrderAndAggregationsData>({
+        retryAttempts: RETRY_ATTEMPTS_LIMIT,
+      });
+
     /**
      * OLD: Get all invoice data for each order
      */
-    const orderInvoiceActionQueue: Array<
-      ActionQueueItem<InvoiceOrderAndAggregationsData>
-    > = orderHistoryData.map((order, index) => ({
-      action: async (): Promise<InvoiceOrderAndAggregationsData> => {
+    orderHistoryData.forEach((order, index) => {
+      const action = async (): Promise<InvoiceOrderAndAggregationsData> => {
         // TODO: pass the rate limiter into each one of these functions, and call it before any API query so that we're rate limiting the query calls themselves.
         await rateLimiter();
         console.log(
@@ -259,63 +254,68 @@ export type ActionQueueItem<T> = {
           orderAggregationsData: orderAggregationsData,
           orderHistoryData: order,
         };
-      },
-      attemptsLimit: RETRY_ATTEMPTS_LIMIT,
-      attemptsMade: 0,
-      id: `${
+      };
+
+      const idSuffix = `${
         order['order_number'] ?? `NO_ORDER_NUMBER-${uuidv4()}`
-      }-${index}-invoiceAction`,
-    }));
+      }-${index}-invoiceAction`;
 
-    const combinedOrderData: Array<InvoiceOrderAndAggregationsData> = [];
-    // let actionRunCount = 0;
-
-    const actionQueueCompletePromiseFunctions: {
-      reject: ((reason?: any) => void) | null;
-      resolve: ((value: PromiseLike<void> | void) => void) | null;
-    } = {reject: null, resolve: null};
-    const actionQueueCompletePromise = new Promise<void>((resolve, reject) => {
-      actionQueueCompletePromiseFunctions.resolve = resolve;
-      actionQueueCompletePromiseFunctions.reject = reject;
+      enqueueAction(action, idSuffix);
     });
 
-    const actionQueue = new Queue<() => Promise<void>>();
+    startQueue();
 
-    const kickoffNextAction = async () => {
-      console.debug(
-        `[Queue size: ${actionQueue.size}] Kicking off next action...`,
-      );
-      const a = actionQueue.dequeue();
-      if (a != null) {
-        a();
-      } else {
-        if (actionQueueCompletePromiseFunctions.resolve == null) {
-          throw new Error(
-            'actionQueueCompletePromiseFunctions.resolve is null. it should not be',
-          );
-        }
-        console.debug(
-          'No more actions to kick off. Resolving the actionQueueCompletePromise',
-        );
-        actionQueueCompletePromiseFunctions.resolve();
-      }
-    };
+    const combinedOrderData = await actionQueueCompletePromise;
 
-    orderInvoiceActionQueue.forEach((action) => {
-      // Should this be enqueue(async () => {...}) ?
-      actionQueue.enqueue(() =>
-        actionQueueWrapperFn({
-          action,
-          combinedOrderData,
-          kickoffNextAction,
-          queue: actionQueue,
-        }),
-      );
-    });
+    // const combinedOrderData: Array<InvoiceOrderAndAggregationsData> = [];
+    // // let actionRunCount = 0;
 
-    kickoffNextAction();
+    // const actionQueueCompletePromiseFunctions: {
+    //   reject: ((reason?: any) => void) | null;
+    //   resolve: ((value: PromiseLike<void> | void) => void) | null;
+    // } = {reject: null, resolve: null};
+    // const actionQueueCompletePromise = new Promise<void>((resolve, reject) => {
+    //   actionQueueCompletePromiseFunctions.resolve = resolve;
+    //   actionQueueCompletePromiseFunctions.reject = reject;
+    // });
 
-    await actionQueueCompletePromise;
+    // const actionQueue = new Queue<() => Promise<void>>();
+
+    // const kickoffNextAction = async () => {
+    //   console.debug(
+    //     `[Queue size: ${actionQueue.size}] Kicking off next action...`,
+    //   );
+    //   const a = actionQueue.dequeue();
+    //   if (a != null) {
+    //     a();
+    //   } else {
+    //     if (actionQueueCompletePromiseFunctions.resolve == null) {
+    //       throw new Error(
+    //         'actionQueueCompletePromiseFunctions.resolve is null. it should not be',
+    //       );
+    //     }
+    //     console.debug(
+    //       'No more actions to kick off. Resolving the actionQueueCompletePromise',
+    //     );
+    //     actionQueueCompletePromiseFunctions.resolve();
+    //   }
+    // };
+
+    // orderInvoiceActionQueue.forEach((action) => {
+    //   // Should this be enqueue(async () => {...}) ?
+    //   actionQueue.enqueue(() =>
+    //     actionQueueWrapperFn({
+    //       action,
+    //       combinedOrderData,
+    //       kickoffNextAction,
+    //       queue: actionQueue,
+    //     }),
+    //   );
+    // });
+
+    // kickoffNextAction();
+
+    // await actionQueueCompletePromise;
 
     /**
      * Output the combined order data to a file
