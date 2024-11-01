@@ -159,10 +159,17 @@ function shouldLogRequestResponse(urlString: string) {
   const outputTimestamp = new Date();
   let fileOutputNumber = 1;
 
+  const outputDataMetadata = {
+    _createdTimestamp: outputTimestamp.valueOf(),
+    _params: {
+      orderCount: ordersFetchedCount,
+      startDate: startDateStringNullable,
+    },
+  };
+
   ORDER_HISTORY_TYPES_TO_OUTPUT.forEach((outputType) => {
     const outputDataOrderHistoryFull: OrderHistoryOutputData = {
-      _createdTimestamp: outputTimestamp.valueOf(),
-      _params: quantityConfig,
+      ...outputDataMetadata,
       orderHistoryData: orderHistoryData,
     };
 
@@ -326,8 +333,7 @@ function shouldLogRequestResponse(urlString: string) {
      */
     COMBINED_OUTPUT_TYPES_TO_OUTPUT.forEach((outputType) => {
       const combinedOutputDataFull: CombinedOutputData = {
-        _createdTimestamp: outputTimestamp.valueOf(),
-        _params: quantityConfig,
+        ...outputDataMetadata,
         invoiceAndOrderData: combinedOrderData,
       };
 

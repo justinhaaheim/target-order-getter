@@ -199,7 +199,7 @@ export const OutputDataBaseZod = z.object({
   _createdTimestamp: z.number(),
   _params: z.object({
     orderCount: z.number().nullable(),
-    startDate: z.date().nullable(),
+    startDate: z.string().nullable(),
   }),
 });
 export type OutputDataBase = z.infer<typeof OutputDataBaseZod>;
