@@ -3,12 +3,14 @@ import {z} from 'zod';
 ///////////////////////////////////////////////////////////
 // Invoice Data
 ///////////////////////////////////////////////////////////
-const PaymentDetail = z.object({
+export const PaymentDetailZod = z.object({
   display_card_number: z.string().optional(), // This field is missing for things like type: "MANUFACTURERCOUPON" or type: "TARGETGIFTCARD" or type: "GENERALLEDGERADJUSTMENT"
   sub_type_value: z.string(), // "Target Circle Credit Card"
   total_charged: z.number(),
   type: z.string(),
 });
+
+export type PaymentDetail = z.infer<typeof PaymentDetailZod>;
 
 const InvoiceLinesObjectItem = z.object({
   description: z.string().optional(),
@@ -35,7 +37,7 @@ export const InvoiceDetailZod = z.object({
   // date: z.string(), // "2024-08-18T20:41:55.000Z",
   id: z.string(),
   lines: z.array(InvoiceLinesObject),
-  payments: z.array(PaymentDetail),
+  payments: z.array(PaymentDetailZod),
   total_amount: z.number(), // 13.19
   type: z.string(), // "SHIPMENT"
   // addresses: ...
