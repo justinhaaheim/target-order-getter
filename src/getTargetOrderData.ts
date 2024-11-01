@@ -13,7 +13,7 @@ import {getNewActionQueue} from './ActionQueue';
 import {playwrightAuthContextOptions, playwrightAuthFilePath} from './Auth';
 import {TARGET_ORDER_PAGE_URL} from './Constants';
 import {CustomRateLimiter} from './CustomRateLimiter';
-import {parseDateStringToNativeDateThrows} from './DateUtils';
+import {parseDateStringToNativeDateWithTimezoneThrows} from './DateUtils';
 import {
   getOutputDataFilenamePrefix,
   writeToJSONFileWithDateTime,
@@ -42,14 +42,16 @@ program.parse();
 const cliOptions = program.opts();
 
 // The number of orders to fetch
-const orderCount =
+const orderCountFromCLI =
   cliOptions['orderCount'] != null ? parseInt(cliOptions['orderCount']) : null;
 const skipInvoiceData: boolean = cliOptions['skipInvoiceData'];
-const startDateNullable: string | null = cliOptions['startDate'] ?? null;
+const startDateStringNullable: string | null = cliOptions['startDate'] ?? null;
 const startDate: Date | null =
-  startDateNullable != null
-    ? parseDateStringToNativeDateThrows(startDateNullable)
+  startDateStringNullable != null
+    ? parseDateStringToNativeDateWithTimezoneThrows(startDateStringNullable)
     : null;
+
+console.log('Parsed startDate:', startDate);
 
 export type QuantityConfig =
   | {orderCount: null; startDate: Date}
@@ -57,7 +59,7 @@ export type QuantityConfig =
 const quantityConfig: QuantityConfig =
   startDate != null
     ? {orderCount: null, startDate}
-    : {orderCount: nullthrows(orderCount), startDate: null};
+    : {orderCount: nullthrows(orderCountFromCLI), startDate: null};
 
 const OUTPUT_DIR = 'output';
 const ORDER_HISTORY_TYPES_TO_OUTPUT: OutputTypes[] = ['Full', 'Pruned'];
@@ -149,6 +151,8 @@ function shouldLogRequestResponse(urlString: string) {
     rateLimiter,
   });
 
+  const ordersFetchedCount = orderHistoryData.length;
+
   /**
    * Output the order history data to a file before proceeding in case the remainder fails
    */
@@ -186,8 +190,10 @@ function shouldLogRequestResponse(urlString: string) {
       name: getOutputDataFilenamePrefix({
         dataType: `orderHistoryData${outputType}`,
         fileNumber: fileOutputNumber,
-        params: `${orderCount}-orders`,
-        totalFiles: TOTAL_OUTPUT_FILE_COUNT,
+        params: {ordersFetchedCount, startDateString: startDateStringNullable},
+        totalFiles: skipInvoiceData
+          ? ORDER_HISTORY_TYPES_TO_OUTPUT.length
+          : TOTAL_OUTPUT_FILE_COUNT,
       }),
       timestamp: outputTimestamp,
     });
@@ -349,7 +355,10 @@ function shouldLogRequestResponse(urlString: string) {
         name: getOutputDataFilenamePrefix({
           dataType: `invoiceAndOrderData${outputType}`,
           fileNumber: fileOutputNumber,
-          params: `${orderCount}-orders`,
+          params: {
+            ordersFetchedCount,
+            startDateString: startDateStringNullable,
+          },
           totalFiles: TOTAL_OUTPUT_FILE_COUNT,
         }),
         timestamp: outputTimestamp,

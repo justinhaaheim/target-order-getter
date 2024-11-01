@@ -100,12 +100,43 @@ export type TargetAPIOrderHistoryObject = z.infer<
   typeof TargetAPIOrderHistoryObjectZod
 >;
 
+const TargetAPIOrderHistoryBaseObjectZod = TargetAPIOrderHistoryObjectZod.pick({
+  placed_date: true,
+});
+
+export type TargetAPIOrderHistoryBaseObject = z.infer<
+  typeof TargetAPIOrderHistoryBaseObjectZod
+>;
+
 export const TargetAPIOrderHistoryObjectArrayZod = z.array(
   TargetAPIOrderHistoryObjectZod,
 );
 
 export type TargetAPIOrderHistoryObjectArray = z.infer<
   typeof TargetAPIOrderHistoryObjectArrayZod
+>;
+
+export const TargetAPIOrderHistoryAPIResponseZod = z.object({
+  orders: TargetAPIOrderHistoryObjectArrayZod,
+  request: z.object({
+    page_number: z.number(),
+    page_size: z.number(),
+  }),
+});
+
+export type TargetAPIOrderHistoryAPIResponse = z.infer<
+  typeof TargetAPIOrderHistoryAPIResponseZod
+>;
+
+// A "loose" type that just guarantees page_number and page_size are there, and that orders is an array
+export const TargetAPIOrderHistoryAPILooseResponseZod =
+  TargetAPIOrderHistoryAPIResponseZod.extend({
+    // This just ensures that placed_date is present
+    orders: z.array(TargetAPIOrderHistoryBaseObjectZod),
+  });
+
+export type TargetAPIOrderHistoryAPILooseResponse = z.infer<
+  typeof TargetAPIOrderHistoryAPILooseResponseZod
 >;
 
 ///////////////////////////////////////////////////////////

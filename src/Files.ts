@@ -11,10 +11,14 @@ export function getOutputDataFilenamePrefix({
 }: {
   dataType: string;
   fileNumber: number;
-  params: string;
+  params: {ordersFetchedCount: number; startDateString: string | null};
   totalFiles: number;
 }): string {
-  return `targetOrderData__${fileNumber}-of-${totalFiles}__${dataType}__${params}`;
+  let paramString = `${params.ordersFetchedCount}-orders`;
+  if (params.startDateString != null) {
+    paramString += `__${params.startDateString}-startDate`;
+  }
+  return `targetOrderData__${fileNumber}-of-${totalFiles}__${dataType}__${paramString}`;
 }
 
 export function writeToJSONFileWithDateTime({

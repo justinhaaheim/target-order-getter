@@ -6,6 +6,8 @@ import type {
   // InvoiceOrderAndAggregationsData,
   TargetAPIInvoiceOverviewObjectArray,
   TargetAPIOrderAggregationsData,
+  TargetAPIOrderHistoryAPILooseResponse,
+  TargetAPIOrderHistoryBaseObject,
   TargetAPIOrderHistoryObjectArray,
 } from './TargetAPITypes';
 import type {Page, Response} from 'playwright';
@@ -18,6 +20,7 @@ import {
   TARGET_API_ORDER_HISTORY_FULL_URL,
   TARGET_ORDER_PAGE_URL,
 } from './Constants';
+import {parseDateStringToNativeDateThrows} from './DateUtils';
 import {getFetchConfig, getJSONNoThrow, isJsObject} from './Helpers';
 import isNonNullable from './isNonNullable';
 import projectConfig from './projectConfig';
@@ -25,6 +28,7 @@ import {
   InvoiceDetailZod,
   TargetAPIInvoiceOverviewObjectArrayZod,
   TargetAPIOrderAggregationsDataZod,
+  TargetAPIOrderHistoryAPILooseResponseZod,
   TargetAPIOrderHistoryObjectArrayZod,
 } from './TargetAPITypes';
 
@@ -102,7 +106,7 @@ function getOrderHistoryActionIDSuffix(pageNumber: number): string {
   return `page-${pageNumber}--orderHistoryAction`;
 }
 
-async function fetchOrderHistoryPage({
+async function getTargetAPIOrderHistoryPage({
   pageNumberToFetch,
   rateLimiter,
   fetchConfig,
@@ -110,7 +114,7 @@ async function fetchOrderHistoryPage({
   fetchConfig: FetchConfigWithResponse;
   pageNumberToFetch: number;
   rateLimiter: RateLimiterFunction;
-}): Promise<unknown[]> {
+}): Promise<Array<TargetAPIOrderHistoryBaseObject>> {
   // Await the rate limiter until it gives us the green light to go
   await rateLimiter();
 
@@ -128,32 +132,76 @@ async function fetchOrderHistoryPage({
   // console.log('New response:', newResponse);
   // console.log('New response JSON:', await newResponse.json());
 
-  const responseJson = (await getJSONNoThrow(newResponse)) as {
-    [key: string]: unknown;
-    request: {page_number: number; page_size: number};
-  };
+  const responseJson = await getJSONNoThrow(newResponse);
 
-  if (responseJson == null) {
-    console.warn(
-      '[getTargetAPIOrderHistoryData] Response JSON is null. This should not happen',
+  console.log(`⭐ Page ${pageNumberToFetch} response JSON:`, responseJson);
+
+  // if (!isJsObject(responseJson)) {
+  //   const message =
+  //     '[getTargetAPIOrderInvoiceOverviewDataFromAPI] responseJson is not an object. This should not happen';
+  //   console.warn(message, {responseJson});
+  //   throw new Error(message);
+  // }
+
+  // Do a loose parse to just ensure page_number and page_size are there. Throws if not.
+  TargetAPIOrderHistoryAPILooseResponseZod.parse(responseJson);
+
+  // Coercing this type allows us to interact with the properties we know are there while keeping other properties not explicitly on the type
+  const parseResult = responseJson as TargetAPIOrderHistoryAPILooseResponse;
+
+  // if (!parseResult.success) {
+  //   console.error(
+  //     `[getTargetAPIOrderHistoryPage] Server response doesn't match expected schema. We'll try to recover anyway.`,
+  //     parseResult.error,
+  //   );
+  // }
+
+  ///
+  ///
+
+  // const responseJson = (await getJSONNoThrow(newResponse)) as {
+  //   [key: string]: unknown;
+  //   request: {page_number: number; page_size: number};
+  // };
+
+  // if (responseJson == null) {
+  //   console.warn(
+  //     '[getTargetAPIOrderHistoryData] Response JSON is null. This should not happen',
+  //   );
+  //   // TODO: Figure out what should actually happen here. Retry??
+  //   return [];
+  // }
+
+  // const pageNumber = responseJson['request']?.['page_number'];
+  // const pageSize = responseJson['request']?.['page_size'];
+  // const ordersArray = responseJson['orders'] as unknown[];
+
+  const pageNumber = parseResult.request.page_number;
+  const pageSize = parseResult.request.page_size;
+
+  if (pageNumber !== pageNumberToFetch) {
+    throw new Error(
+      `Server response page_number (${pageNumber}) doesn't match requested page number (${pageNumberToFetch})`,
     );
-    // TODO: Figure out what should actually happen here. Retry??
-    return [];
   }
-
-  const pageNumber = responseJson['request']?.['page_number'];
-  const pageSize = responseJson['request']?.['page_size'];
-  const ordersArray = responseJson['orders'] as unknown[];
 
   console.log(
     `Received order_history data for page number ${pageNumber} (page size: ${pageSize})`,
   );
 
-  if (typeof pageNumber !== 'number' || typeof pageSize !== 'number') {
-    console.warn('Page number or page size is not a number');
-  }
+  const ordersArray = parseResult.orders;
 
   return ordersArray;
+}
+
+// TODO: Figure out if I need to fiddle with timezones. Parsing a date string to a date object returns a date in GMT.
+function getEarliestOrderDateFromOrderHistoryData(
+  ordersArray: Array<TargetAPIOrderHistoryBaseObject>,
+): Date {
+  const dates = ordersArray.map((order) =>
+    parseDateStringToNativeDateThrows(order.placed_date),
+  );
+  return new Date(Math.min(...dates.map((d) => d.valueOf())));
 }
 
 /**
@@ -168,9 +216,6 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
     '[getTargetAPIOrderHistoryData] Quantity config:',
     quantityConfig,
   );
-
-  // TODO: FIX THIS TO SUPPORT DATE
-  const orderCountToFetch = nullthrows(quantityConfig.orderCount);
 
   const {apiURL: apiURLFromInitialRequest} =
     fetchConfigFromInitialOrderHistoryRequest;
@@ -199,7 +244,7 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
   const fetchOrderHistoryPageAndEnqueueActionIfNeeded = async (
     pageNumberToFetch: number,
   ) => {
-    const ordersArray = await fetchOrderHistoryPage({
+    const ordersArray = await getTargetAPIOrderHistoryPage({
       fetchConfig: fetchConfigFromInitialOrderHistoryRequest,
       pageNumberToFetch,
       rateLimiter,
@@ -207,9 +252,29 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
 
     ordersFetchedCount += ordersArray.length;
 
-    if (ordersFetchedCount < orderCountToFetch) {
+    let shouldFetchMoreOrders: boolean | null = null;
+
+    if (quantityConfig.startDate != null) {
+      const earliestDate =
+        getEarliestOrderDateFromOrderHistoryData(ordersArray);
       console.log(
-        `Enqueuing action to fetch next page. Orders fetched so far: ${ordersFetchedCount}/${orderCountToFetch}`,
+        `Earliest date from order history page ${pageNumberToFetch}:`,
+        earliestDate.toUTCString(),
+      );
+      shouldFetchMoreOrders = quantityConfig.startDate < earliestDate;
+    }
+
+    if (quantityConfig.orderCount != null) {
+      shouldFetchMoreOrders = ordersFetchedCount < quantityConfig.orderCount;
+    }
+
+    nullthrows(shouldFetchMoreOrders);
+
+    if (shouldFetchMoreOrders) {
+      console.log(
+        `Enqueuing action to fetch next page. Orders fetched so far: ${ordersFetchedCount}/${
+          quantityConfig.orderCount ?? '??'
+        }`,
       );
 
       enqueueAction(
@@ -257,8 +322,16 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
   // We know that this may contain keys that are not in our schema, but we'll strip those out later
   const orderDataTyped = orderData as TargetAPIOrderHistoryObjectArray;
 
+  if (quantityConfig.startDate != null) {
+    const ordersAfterStartDate = orderDataTyped.filter(
+      (order) =>
+        parseDateStringToNativeDateThrows(order.placed_date) >=
+        quantityConfig.startDate,
+    );
+    return ordersAfterStartDate;
+  }
   // NOTE: We will often be fetching more orders than we need, but for clarity let's only return the amount requested
-  return orderDataTyped.slice(0, orderCountToFetch);
+  return orderDataTyped.slice(0, quantityConfig.orderCount);
 }
 
 /**
