@@ -67,8 +67,6 @@ const TOTAL_OUTPUT_FILE_COUNT =
 
 const TIMEOUT_FOR_INITIAL_AUTHENTICATION = 120 * 1000;
 
-const RETRY_ATTEMPTS_LIMIT = 3;
-
 function shouldLogRequestResponse(urlString: string) {
   const url = new URL(urlString);
 
@@ -209,7 +207,7 @@ function shouldLogRequestResponse(urlString: string) {
 
     const {actionQueueCompletePromise, enqueueAction, startQueue} =
       getNewActionQueue<InvoiceOrderAndAggregationsData>({
-        retryAttempts: RETRY_ATTEMPTS_LIMIT,
+        retryAttempts: projectConfig.retryAttemptsLimit,
       });
 
     /**

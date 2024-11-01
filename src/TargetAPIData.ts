@@ -3,6 +3,7 @@ import type {QuantityConfig} from './getTargetOrderData';
 import type {FetchConfigWithResponse} from './Helpers';
 import type {
   InvoiceDetail,
+  // InvoiceOrderAndAggregationsData,
   TargetAPIInvoiceOverviewObjectArray,
   TargetAPIOrderAggregationsData,
   TargetAPIOrderHistoryObjectArray,
@@ -11,14 +12,15 @@ import type {Page, Response} from 'playwright';
 
 import nullthrows from 'nullthrows';
 
+import {getNewActionQueue} from './ActionQueue';
 import {
   TARGET_API_HOSTNAME,
   TARGET_API_ORDER_HISTORY_FULL_URL,
   TARGET_ORDER_PAGE_URL,
 } from './Constants';
-import {range} from './GeneralUtils';
 import {getFetchConfig, getJSONNoThrow, isJsObject} from './Helpers';
 import isNonNullable from './isNonNullable';
+import projectConfig from './projectConfig';
 import {
   InvoiceDetailZod,
   TargetAPIInvoiceOverviewObjectArrayZod,
@@ -96,6 +98,64 @@ export async function getTargetAPIOrderHistoryFetchConfig({
   });
 }
 
+function getOrderHistoryActionIDSuffix(pageNumber: number): string {
+  return `page-${pageNumber}--orderHistoryAction`;
+}
+
+async function fetchOrderHistoryPage({
+  pageNumberToFetch,
+  rateLimiter,
+  fetchConfig,
+}: {
+  fetchConfig: FetchConfigWithResponse;
+  pageNumberToFetch: number;
+  rateLimiter: RateLimiterFunction;
+}): Promise<unknown[]> {
+  // Await the rate limiter until it gives us the green light to go
+  await rateLimiter();
+
+  console.log(
+    `📡 Fetching page number ${pageNumberToFetch} directly from the API...`,
+  );
+
+  const {apiURL: apiURLFromInitialRequest, requestInit} = fetchConfig;
+
+  const newUrl = new URL(apiURLFromInitialRequest);
+  newUrl.searchParams.set('page_number', pageNumberToFetch.toString());
+
+  const newResponse = await fetch(newUrl, requestInit);
+
+  // console.log('New response:', newResponse);
+  // console.log('New response JSON:', await newResponse.json());
+
+  const responseJson = (await getJSONNoThrow(newResponse)) as {
+    [key: string]: unknown;
+    request: {page_number: number; page_size: number};
+  };
+
+  if (responseJson == null) {
+    console.warn(
+      '[getTargetAPIOrderHistoryData] Response JSON is null. This should not happen',
+    );
+    // TODO: Figure out what should actually happen here. Retry??
+    return [];
+  }
+
+  const pageNumber = responseJson['request']?.['page_number'];
+  const pageSize = responseJson['request']?.['page_size'];
+  const ordersArray = responseJson['orders'] as unknown[];
+
+  console.log(
+    `Received order_history data for page number ${pageNumber} (page size: ${pageSize})`,
+  );
+
+  if (typeof pageNumber !== 'number' || typeof pageSize !== 'number') {
+    console.warn('Page number or page size is not a number');
+  }
+
+  return ordersArray;
+}
+
 /**
  * Order History: The list of a customers orders
  */
@@ -110,14 +170,14 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
   );
 
   // TODO: FIX THIS TO SUPPORT DATE
-  const orderCount = nullthrows(quantityConfig.orderCount);
+  const orderCountToFetch = nullthrows(quantityConfig.orderCount);
 
-  const {apiURL: apiURLFromInitialRequest, requestInit} =
+  const {apiURL: apiURLFromInitialRequest} =
     fetchConfigFromInitialOrderHistoryRequest;
 
-  const initialPageSize = parseInt(
-    nullthrows(apiURLFromInitialRequest.searchParams.get('page_size')),
-  );
+  // const initialPageSize = parseInt(
+  //   nullthrows(apiURLFromInitialRequest.searchParams.get('page_size')),
+  // );
   const initialPageNumber = parseInt(
     nullthrows(apiURLFromInitialRequest.searchParams.get('page_number')),
   );
@@ -126,54 +186,52 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
     throw new Error('pageNumber should be 1 for the first request');
   }
 
-  const pagesRequiredForOrderCount = Math.ceil(orderCount / initialPageSize);
-  const pageNumbersToFetch = range(1, pagesRequiredForOrderCount + 1);
+  const {actionQueueCompletePromise, enqueueAction, startQueue} =
+    getNewActionQueue<unknown>({
+      retryAttempts: projectConfig.retryAttemptsLimit,
+    });
 
-  const pages = await Promise.all(
-    pageNumbersToFetch.map(async (pageNumberToFetch) => {
-      // Await the rate limiter until it gives us the green light to go
-      await rateLimiter();
+  // const pagesRequiredForOrderCount = Math.ceil(orderCount / initialPageSize);
+  // const pageNumbersToFetch = range(1, pagesRequiredForOrderCount + 1);
 
+  let ordersFetchedCount = 0;
+
+  const fetchOrderHistoryPageAndEnqueueActionIfNeeded = async (
+    pageNumberToFetch: number,
+  ) => {
+    const ordersArray = await fetchOrderHistoryPage({
+      fetchConfig: fetchConfigFromInitialOrderHistoryRequest,
+      pageNumberToFetch,
+      rateLimiter,
+    });
+
+    ordersFetchedCount += ordersArray.length;
+
+    if (ordersFetchedCount < orderCountToFetch) {
       console.log(
-        `📡 Fetching page number ${pageNumberToFetch} directly from the API...`,
+        `Enqueuing action to fetch next page. Orders fetched so far: ${ordersFetchedCount}/${orderCountToFetch}`,
       );
 
-      const newUrl = new URL(apiURLFromInitialRequest);
-      newUrl.searchParams.set('page_number', pageNumberToFetch.toString());
-
-      const newResponse = await fetch(newUrl, requestInit);
-
-      // console.log('New response:', newResponse);
-      // console.log('New response JSON:', await newResponse.json());
-
-      const responseJson = (await getJSONNoThrow(newResponse)) as {
-        [key: string]: unknown;
-        request: {page_number: number; page_size: number};
-      };
-
-      if (responseJson == null) {
-        console.warn(
-          '[getTargetAPIOrderHistoryData] Response JSON is null. This should not happen',
-        );
-        // TODO: Figure out what should actually happen here
-        return [];
-      }
-
-      const pageNumber = responseJson['request']?.['page_number'];
-      const pageSize = responseJson['request']?.['page_size'];
-      const ordersArray = responseJson['orders'] as unknown[];
-
-      console.log(
-        `Received order_history data for page number ${pageNumber} (page size: ${pageSize})`,
+      enqueueAction(
+        async () => {
+          return fetchOrderHistoryPageAndEnqueueActionIfNeeded(
+            pageNumberToFetch + 1,
+          );
+        },
+        getOrderHistoryActionIDSuffix(pageNumberToFetch + 1),
       );
+    }
 
-      if (typeof pageNumber !== 'number' || typeof pageSize !== 'number') {
-        console.warn('Page number or page size is not a number');
-      }
+    return ordersArray;
+  };
 
-      return ordersArray;
-    }),
-  );
+  enqueueAction(async () => {
+    return fetchOrderHistoryPageAndEnqueueActionIfNeeded(initialPageNumber);
+  }, getOrderHistoryActionIDSuffix(initialPageNumber));
+
+  startQueue();
+
+  const pages = await actionQueueCompletePromise;
 
   const orderData = pages.flat();
 
@@ -200,7 +258,7 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
   const orderDataTyped = orderData as TargetAPIOrderHistoryObjectArray;
 
   // NOTE: We will often be fetching more orders than we need, but for clarity let's only return the amount requested
-  return orderDataTyped.slice(0, orderCount);
+  return orderDataTyped.slice(0, orderCountToFetch);
 }
 
 /**
