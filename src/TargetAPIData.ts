@@ -129,52 +129,15 @@ async function getTargetAPIOrderHistoryPage({
 
   const newResponse = await fetch(newUrl, requestInit);
 
-  // console.log('New response:', newResponse);
-  // console.log('New response JSON:', await newResponse.json());
-
   const responseJson = await getJSONNoThrow(newResponse);
 
-  console.log(`⭐ Page ${pageNumberToFetch} response JSON:`, responseJson);
-
-  // if (!isJsObject(responseJson)) {
-  //   const message =
-  //     '[getTargetAPIOrderInvoiceOverviewDataFromAPI] responseJson is not an object. This should not happen';
-  //   console.warn(message, {responseJson});
-  //   throw new Error(message);
-  // }
+  // console.log(`⭐ Page ${pageNumberToFetch} response JSON:`, responseJson);
 
   // Do a loose parse to just ensure page_number and page_size are there. Throws if not.
   TargetAPIOrderHistoryAPILooseResponseZod.parse(responseJson);
 
-  // Coercing this type allows us to interact with the properties we know are there while keeping other properties not explicitly on the type
+  // Coercing to this type allows us to interact with the properties we know are there while keeping other properties not explicitly on the type
   const parseResult = responseJson as TargetAPIOrderHistoryAPILooseResponse;
-
-  // if (!parseResult.success) {
-  //   console.error(
-  //     `[getTargetAPIOrderHistoryPage] Server response doesn't match expected schema. We'll try to recover anyway.`,
-  //     parseResult.error,
-  //   );
-  // }
-
-  ///
-  ///
-
-  // const responseJson = (await getJSONNoThrow(newResponse)) as {
-  //   [key: string]: unknown;
-  //   request: {page_number: number; page_size: number};
-  // };
-
-  // if (responseJson == null) {
-  //   console.warn(
-  //     '[getTargetAPIOrderHistoryData] Response JSON is null. This should not happen',
-  //   );
-  //   // TODO: Figure out what should actually happen here. Retry??
-  //   return [];
-  // }
-
-  // const pageNumber = responseJson['request']?.['page_number'];
-  // const pageSize = responseJson['request']?.['page_size'];
-  // const ordersArray = responseJson['orders'] as unknown[];
 
   const pageNumber = parseResult.request.page_number;
   const pageSize = parseResult.request.page_size;
@@ -194,7 +157,6 @@ async function getTargetAPIOrderHistoryPage({
   return ordersArray;
 }
 
-// TODO: Figure out if I need to fiddle with timezones. Parsing a date string to a date object returns a date in GMT.
 function getEarliestOrderDateFromOrderHistoryData(
   ordersArray: Array<TargetAPIOrderHistoryBaseObject>,
 ): Date {
@@ -220,9 +182,6 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
   const {apiURL: apiURLFromInitialRequest} =
     fetchConfigFromInitialOrderHistoryRequest;
 
-  // const initialPageSize = parseInt(
-  //   nullthrows(apiURLFromInitialRequest.searchParams.get('page_size')),
-  // );
   const initialPageNumber = parseInt(
     nullthrows(apiURLFromInitialRequest.searchParams.get('page_number')),
   );
@@ -235,9 +194,6 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
     getNewActionQueue<unknown>({
       retryAttempts: projectConfig.retryAttemptsLimit,
     });
-
-  // const pagesRequiredForOrderCount = Math.ceil(orderCount / initialPageSize);
-  // const pageNumbersToFetch = range(1, pagesRequiredForOrderCount + 1);
 
   let ordersFetchedCount = 0;
 
@@ -306,8 +262,6 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
     orderData,
   );
 
-  // Throws if the data is not in the expected format
-  // Because our type has a union with Record<string, unknown>, any keys we haven't specifically typed will still pass through
   const parseResult = TargetAPIOrderHistoryObjectArrayZod.safeParse(orderData);
 
   if (!parseResult.success) {
