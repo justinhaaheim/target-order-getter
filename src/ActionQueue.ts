@@ -15,7 +15,10 @@ type ActionQueueConfig = {
 
 type ActionQueueReturnType<OutputDataType> = {
   actionQueueCompletePromise: Promise<Array<OutputDataType>>;
-  enqueueAction: (action: ActionFunction<OutputDataType>) => void;
+  enqueueAction: (
+    action: ActionFunction<OutputDataType>,
+    idSuffix: string,
+  ) => void;
   startQueue: () => void;
 };
 
@@ -117,13 +120,16 @@ export function getNewActionQueue<OutputDataType>(
 
   let actionIDCounter = 0;
 
-  const enqueueAction = (action: () => Promise<OutputDataType>) => {
+  const enqueueAction = (
+    action: () => Promise<OutputDataType>,
+    idSuffix: string,
+  ) => {
     actionQueue.enqueue(async () => {
       return actionQueueWrapperFn({
         action,
         attemptsLimit: actionQueueConfig.retryAttempts,
         attemptsMade: 0,
-        id: `action-${actionIDCounter++}`,
+        id: `action-${actionIDCounter++}--${idSuffix}`,
       });
     });
   };

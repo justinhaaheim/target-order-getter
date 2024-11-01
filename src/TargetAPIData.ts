@@ -109,6 +109,9 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
     quantityConfig,
   );
 
+  // TODO: FIX THIS TO SUPPORT DATE
+  const orderCount = nullthrows(quantityConfig.orderCount);
+
   const {apiURL: apiURLFromInitialRequest, requestInit} =
     fetchConfigFromInitialOrderHistoryRequest;
 
