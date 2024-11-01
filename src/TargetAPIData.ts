@@ -215,7 +215,7 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
         getEarliestOrderDateFromOrderHistoryData(ordersArray);
       console.log(
         `Earliest date from order history page ${pageNumberToFetch}:`,
-        earliestDate.toUTCString(),
+        earliestDate,
       );
       shouldFetchMoreOrders = quantityConfig.startDate < earliestDate;
     }

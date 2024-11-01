@@ -165,7 +165,7 @@ const TargetAPIOrderAggregationsOrderLinesObjectZod =
   });
 
 export const TargetAPIOrderAggregationsDataZod = z.object({
-  external_order_number: z.string(),
+  external_order_number: z.string().optional(), // This is missing in rare cases (perahps on Shipt orders?). It appears to be replaced by parent_order_number
   order_lines: z.array(TargetAPIOrderAggregationsOrderLinesObjectZod),
   placed_date: z.string(),
 });
