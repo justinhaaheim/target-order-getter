@@ -1,4 +1,5 @@
 import type {RateLimiterFunction} from './CustomRateLimiter';
+import type {QuantityConfig} from './getTargetOrderData';
 import type {FetchConfigWithResponse} from './Helpers';
 import type {
   InvoiceDetail,
@@ -37,8 +38,8 @@ const TARGET_RESOURCE_NOT_FOUND_CODE = 102;
 type GetTargetAPIOrderHistoryConfig = {
   // TODO: Support startDate
   fetchConfigFromInitialOrderHistoryRequest: FetchConfigWithResponse;
-  orderCount: number;
   page: Page;
+  quantityConfig: QuantityConfig;
   rateLimiter: RateLimiterFunction;
 };
 
@@ -99,11 +100,14 @@ export async function getTargetAPIOrderHistoryFetchConfig({
  * Order History: The list of a customers orders
  */
 export async function getTargetAPIOrderHistoryDataFromAPI({
-  orderCount,
+  quantityConfig,
   rateLimiter,
   fetchConfigFromInitialOrderHistoryRequest,
 }: GetTargetAPIOrderHistoryConfig): Promise<TargetAPIOrderHistoryObjectArray> {
-  console.log('[getTargetAPIOrderHistoryData] Order count:', orderCount);
+  console.log(
+    '[getTargetAPIOrderHistoryData] Quantity config:',
+    quantityConfig,
+  );
 
   const {apiURL: apiURLFromInitialRequest, requestInit} =
     fetchConfigFromInitialOrderHistoryRequest;

@@ -20,13 +20,21 @@ export function getTimePrettyString(date?: Date): string {
   return dayjs(date).format('h:mm a');
 }
 
-export function parseDateToNativeDate(dateString?: string): Date | null {
+export function parseDateStringToNativeDate(dateString: string): Date | null {
   const d = dayjs(dateString).toDate();
   return isNaN(d.valueOf()) ? null : d;
 }
 
-export function parseAndGetTimeSinceValue(dateString?: string): number | null {
-  const d = parseDateToNativeDate(dateString);
+export function parseDateStringToNativeDateThrows(dateString: string): Date {
+  const d = dayjs(dateString).toDate();
+  if (isNaN(d.valueOf())) {
+    throw new Error(`Invalid date string: ${dateString}`);
+  }
+  return d;
+}
+
+export function parseAndGetTimeSinceValue(dateString: string): number | null {
+  const d = parseDateStringToNativeDate(dateString);
   if (d == null) {
     return null;
   }

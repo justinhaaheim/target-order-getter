@@ -5,13 +5,15 @@ import type {
 } from './TargetAPITypes';
 import type {Request, Response} from 'playwright';
 
-import {Command} from 'commander';
+import {Command} from '@commander-js/extra-typings';
+import nullthrows from 'nullthrows';
 import {v4 as uuidv4} from 'uuid';
 import Queue from 'yocto-queue';
 
 import {playwrightAuthContextOptions, playwrightAuthFilePath} from './Auth';
 import {TARGET_ORDER_PAGE_URL} from './Constants';
 import {CustomRateLimiter} from './CustomRateLimiter';
+import {parseDateStringToNativeDateThrows} from './DateUtils';
 import {
   getOutputDataFilenamePrefix,
   writeToJSONFileWithDateTime,
@@ -32,18 +34,31 @@ import {
 
 type OutputTypes = 'Full' | 'Pruned';
 
-const program = new Command();
-
-program.name('getTargetOrderData');
-program
-  .requiredOption('-o, --orderCount <number>', 'The number of orders to fetch')
-  .option('--skipInvoiceData', 'Skip fetching invoice data');
+const program = new Command()
+  .name('getTargetOrderData')
+  .option('-o, --orderCount <number>', 'The number of orders to fetch')
+  .option('-s, --startDate <string>', 'The start date for orders to fetch')
+  .option('--skipInvoiceData', 'Skip fetching invoice data', false);
 program.parse();
 const cliOptions = program.opts();
 
 // The number of orders to fetch
-const orderCount = parseInt(cliOptions['orderCount']);
+const orderCount =
+  cliOptions['orderCount'] != null ? parseInt(cliOptions['orderCount']) : null;
 const skipInvoiceData: boolean = cliOptions['skipInvoiceData'];
+const startDateNullable: string | null = cliOptions['startDate'] ?? null;
+const startDate: Date | null =
+  startDateNullable != null
+    ? parseDateStringToNativeDateThrows(startDateNullable)
+    : null;
+
+export type QuantityConfig =
+  | {orderCount: null; startDate: Date}
+  | {orderCount: number; startDate: null};
+const quantityConfig: QuantityConfig =
+  startDate != null
+    ? {orderCount: null, startDate}
+    : {orderCount: nullthrows(orderCount), startDate: null};
 
 const OUTPUT_DIR = 'output';
 const ORDER_HISTORY_TYPES_TO_OUTPUT: OutputTypes[] = ['Full', 'Pruned'];
@@ -139,8 +154,8 @@ export type ActionQueueItem<T> = {
   console.log('\n\n📋 Getting order history data...');
   const orderHistoryData = await getTargetAPIOrderHistoryDataFromAPI({
     fetchConfigFromInitialOrderHistoryRequest: fetchConfig,
-    orderCount,
     page: mainPage,
+    quantityConfig,
     rateLimiter,
   });
 
@@ -153,7 +168,7 @@ export type ActionQueueItem<T> = {
   ORDER_HISTORY_TYPES_TO_OUTPUT.forEach((outputType) => {
     const outputDataOrderHistoryFull: OrderHistoryOutputData = {
       _createdTimestamp: outputTimestamp.valueOf(),
-      _params: {orderCount},
+      _params: quantityConfig,
       orderHistoryData: orderHistoryData,
     };
 
@@ -287,6 +302,7 @@ export type ActionQueueItem<T> = {
     };
 
     orderInvoiceActionQueue.forEach((action) => {
+      // Should this be enqueue(async () => {...}) ?
       actionQueue.enqueue(() =>
         actionQueueWrapperFn({
           action,
@@ -307,7 +323,7 @@ export type ActionQueueItem<T> = {
     COMBINED_OUTPUT_TYPES_TO_OUTPUT.forEach((outputType) => {
       const combinedOutputDataFull: CombinedOutputData = {
         _createdTimestamp: outputTimestamp.valueOf(),
-        _params: {orderCount},
+        _params: quantityConfig,
         invoiceAndOrderData: combinedOrderData,
       };
 

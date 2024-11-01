@@ -165,7 +165,8 @@ export type InvoiceOrderAndAggregationsData = z.infer<
 export const OutputDataBaseZod = z.object({
   _createdTimestamp: z.number(),
   _params: z.object({
-    orderCount: z.number(),
+    orderCount: z.number().nullable(),
+    startDate: z.date().nullable(),
   }),
 });
 export type OutputDataBase = z.infer<typeof OutputDataBaseZod>;
