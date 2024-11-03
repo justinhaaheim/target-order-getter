@@ -26,7 +26,24 @@ const InvoiceLinesObject = z.object({
   invoice_key: z.string(),
   item: InvoiceLinesObjectItem,
   order_line_key: z.string(),
+
+  /**
+   * In most/all cases we want to use *shipped_quantity* instead of quantity.
+   *
+   * Shipped quantity refers to the actual number of items represented by a given invoice line.
+   *
+   * Quantity refers to the total number of items that have the same `id`, but which will show up as separate line items.
+   *
+   * quantity !== shipped_quantity happens when you've ordered multiple of the same item, but they are priced slightly differently
+   * or have a discount that applies more to one item than the other.
+   *
+   * Ultimately it probably makes sense to group those line items together -- I can't really think of a situation where we'd
+   * actually want to categorize two of the exact same item separately because they had slightly different prices. But for simplicity
+   * let's use shipped_quantity for now.
+   */
   quantity: z.number(),
+  shipped_quantity: z.number(),
+
   sub_total: z.number(), // This is `amount - discount`
   total_tax: z.number(),
   unit_price: z.number(), // how much each item costs
