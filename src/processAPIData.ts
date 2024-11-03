@@ -21,7 +21,11 @@ const program = new Command()
     'Slice the invoiceAndOrderData array',
     parseInt,
   )
-  .option('-c, --customSuffix <string>', 'Custom suffix for output file');
+  .option('-c, --customSuffix <string>', 'Custom suffix for output file')
+  .option(
+    '-l, --validate',
+    'Validate the input file using the CombinedOutputDataZod schema',
+  );
 
 program.parse(process.argv);
 
@@ -30,6 +34,7 @@ const {
   prune: shouldPrune,
   slice: sliceCount,
   customSuffix,
+  validate,
 } = program.opts();
 
 if (!fs.existsSync(inputFilePath)) {
@@ -50,8 +55,33 @@ let shouldWriteOutput = false;
 
 const outputPathSuffixes = [];
 
-// Slice before pruning so we're doing less work, and so validation errors in the data that will
-// be sliced away don't cause the prune to fail.
+// Create a space between input logs and output logs
+console.log();
+
+if (shouldPrune || validate) {
+  const pruneResult = CombinedOutputDataZod.safeParse(outputData);
+
+  if (validate) {
+    if (pruneResult.success) {
+      console.log('✅ Validation complete! No errors found.');
+    } else {
+      console.error('❌ Validation failed:', pruneResult.error);
+    }
+  }
+
+  if (shouldPrune) {
+    outputPathSuffixes.push('--pruned');
+
+    if (!pruneResult.success) {
+      console.error('❌ Failed to prune data: ', pruneResult.error);
+      process.exit(1);
+    }
+    console.log('✅ Pruning successful');
+    outputData = pruneResult.data;
+    shouldWriteOutput = true;
+  }
+}
+
 if (sliceCount != null) {
   outputPathSuffixes.push(`--sliced-${sliceCount}`);
 
@@ -59,18 +89,6 @@ if (sliceCount != null) {
     0,
     sliceCount,
   );
-  shouldWriteOutput = true;
-}
-
-if (shouldPrune) {
-  outputPathSuffixes.push('--pruned');
-
-  const pruneResult = CombinedOutputDataZod.safeParse(outputData);
-  if (!pruneResult.success) {
-    console.error('Failed to prune data:', pruneResult.error);
-    process.exit(1);
-  }
-  outputData = pruneResult.data;
   shouldWriteOutput = true;
 }
 
@@ -89,7 +107,7 @@ if (shouldWriteOutput) {
   fs.writeFileSync(outputFilePath, outputString);
 
   console.log();
-  console.log(`Output written to ${outputFilePath}`);
+  console.log(`💾 Output written to ${outputFilePath}`);
 
   const inputLengthStandard = formatStandardNumber(inputString.length);
   const outputLengthStandard = formatStandardNumber(outputString.length);
