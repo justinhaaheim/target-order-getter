@@ -89,6 +89,8 @@ if (sliceCount != null) {
     0,
     sliceCount,
   );
+
+  console.log(`✅ Sliced to include ${sliceCount} items`);
   shouldWriteOutput = true;
 }
 
