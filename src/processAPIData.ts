@@ -15,7 +15,7 @@ import {CombinedOutputDataZod} from './TargetAPITypes';
 const program = new Command()
   .name('processCombinedOutputData')
   .requiredOption('-i, --input <file>', 'Input JSON file')
-  .option('-p, --prune', 'Prune the data')
+  .option('-p, --prune', 'Prune the data', false)
   .option(
     '-s, --slice <number>',
     'Slice the invoiceAndOrderData array',
@@ -25,7 +25,9 @@ const program = new Command()
   .option(
     '-l, --validate',
     'Validate the input file using the CombinedOutputDataZod schema',
-  );
+    false,
+  )
+  .option('--extractCategories', 'Extract categories from the data', false);
 
 program.parse(process.argv);
 
@@ -33,6 +35,7 @@ const {
   input: inputFilePath,
   prune: shouldPrune,
   slice: sliceCount,
+  extractCategories,
   customSuffix,
   validate,
 } = program.opts();
@@ -48,9 +51,10 @@ const inputFileSizeString =
 console.log(`Input file size: ${inputFileSizeString}`);
 
 const inputString = fs.readFileSync(inputFilePath, 'utf-8');
-const inputData = JSON.parse(inputString);
+const inputData = JSON.parse(inputString) as unknown;
 
-let outputData: CombinedOutputData = inputData;
+// Just assume it's in the right format. If it's not it'll either fail validation or throw if we try an improper access
+let outputData = inputData as CombinedOutputData;
 let shouldWriteOutput = false;
 
 const outputPathSuffixes = [];
@@ -92,6 +96,45 @@ if (sliceCount != null) {
 
   console.log(`✅ Sliced to include ${sliceCount} items`);
   shouldWriteOutput = true;
+}
+
+if (extractCategories) {
+  const categories: Array<[string, string, string]> = [];
+
+  outputData.invoiceAndOrderData.forEach((iod) => {
+    iod.orderAggregationsData.order_lines.forEach((line) => {
+      const typeName =
+        line.item.product_classification?.product_type_name ?? 'NO_TYPE_NAME';
+      const subTypeName =
+        line.item.product_classification?.product_subtype_name ??
+        'NO_SUBTYPE_NAME';
+      const merchTypeName =
+        line.item.product_classification?.merchandise_type_name ??
+        'NO_MERCH_TYPE_NAME';
+
+      const exists = categories.some((c) =>
+        c.every(
+          (catString, i) =>
+            catString === [typeName, subTypeName, merchTypeName][i],
+        ),
+      );
+      if (!exists) {
+        categories.push([typeName, subTypeName, merchTypeName]);
+      }
+    });
+  });
+
+  const separator = ' > ';
+
+  const categoriesSorted = categories
+    .slice()
+    .sort((a, b) => a.join(separator).localeCompare(b.join(separator)));
+
+  console.log('Categories:');
+  console.log(categoriesSorted);
+
+  console.log('Categories:');
+  console.log(categoriesSorted.map((c) => c.join(separator)).join('\n'));
 }
 
 if (shouldWriteOutput) {
