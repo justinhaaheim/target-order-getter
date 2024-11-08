@@ -162,17 +162,20 @@ export type TargetAPIOrderHistoryAPILooseResponse = z.infer<
 // Order Aggregations Data (used for getting item categories)
 ///////////////////////////////////////////////////////////
 
+const TargetAPIProductClassificationZod = z.object({
+  merchandise_type_name: z.string().optional(), // "Oral Care"
+  // I'm not sure if these are optional or not, but let's assume they are
+  product_subtype_name: z.string().optional(), // "BEVERAGE"
+  product_type_name: z.string().optional(), // "GROCERY"
+});
+export type TargetAPIProductClassificationObject = z.infer<
+  typeof TargetAPIProductClassificationZod
+>;
+
 const TargetAPIOrderAggregationsOrderLinesItemFullZod =
   TargetAPIBaseItemZod.extend({
     // I saw one case where this wasn't present for some reason, so let's consider it optional
-    product_classification: z.optional(
-      z.object({
-        merchandise_type_name: z.string().optional(), // "Oral Care"
-        // I'm not sure if these are optional or not, but let's assume they are
-        product_subtype_name: z.string().optional(), // "BEVERAGE"
-        product_type_name: z.string().optional(), // "GROCERY"
-      }),
-    ),
+    product_classification: z.optional(TargetAPIProductClassificationZod),
   });
 
 const TargetAPIOrderAggregationsOrderLinesObjectZod =
