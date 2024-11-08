@@ -277,12 +277,17 @@ export async function getTargetAPIOrderHistoryDataFromAPI({
   const orderDataTyped = orderData as TargetAPIOrderHistoryObjectArray;
 
   if (quantityConfig.startDate != null) {
-    const ordersAfterStartDate = orderDataTyped.filter(
-      (order) =>
-        parseDateStringToNativeDateThrows(order.placed_date) >=
-        quantityConfig.startDate,
-    );
-    return ordersAfterStartDate;
+    const ordersWithinDateRange = orderDataTyped.filter((order) => {
+      const placedDate = parseDateStringToNativeDateThrows(order.placed_date);
+      if (quantityConfig.endDate != null) {
+        return (
+          placedDate >= quantityConfig.startDate &&
+          placedDate <= quantityConfig.endDate
+        );
+      }
+      return placedDate >= quantityConfig.startDate;
+    });
+    return ordersWithinDateRange;
   }
   // NOTE: We will often be fetching more orders than we need, but for clarity let's only return the amount requested
   return orderDataTyped.slice(0, quantityConfig.orderCount);

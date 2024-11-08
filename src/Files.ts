@@ -11,12 +11,19 @@ export function getOutputDataFilenamePrefix({
 }: {
   dataType: string;
   fileNumber: number;
-  params: {ordersFetchedCount: number; startDateString: string | null};
+  params: {
+    endDateString: string | null;
+    ordersFetchedCount: number;
+    startDateString: string | null;
+  };
   totalFiles: number;
 }): string {
   let paramString = `${params.ordersFetchedCount}-orders`;
   if (params.startDateString != null) {
     paramString += `__${params.startDateString}-startDate`;
+  }
+  if (params.endDateString != null) {
+    paramString += `__${params.endDateString}-endDate`;
   }
   return `targetOrderData__${fileNumber}-of-${totalFiles}__${dataType}__${paramString}`;
 }

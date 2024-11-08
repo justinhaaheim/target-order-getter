@@ -37,6 +37,7 @@ const program = new Command()
   .name('getTargetOrderData')
   .option('-o, --orderCount <number>', 'The number of orders to fetch')
   .option('-s, --startDate <string>', 'The start date for orders to fetch')
+  .option('-e, --endDate <string>', 'The end date for orders to fetch')
   .option('--skipInvoiceData', 'Skip fetching invoice data', false);
 program.parse();
 const cliOptions = program.opts();
@@ -45,20 +46,28 @@ const cliOptions = program.opts();
 const orderCountFromCLI =
   cliOptions['orderCount'] != null ? parseInt(cliOptions['orderCount']) : null;
 const skipInvoiceData: boolean = cliOptions['skipInvoiceData'];
+
 const startDateStringNullable: string | null = cliOptions['startDate'] ?? null;
 const startDate: Date | null =
   startDateStringNullable != null
     ? parseDateStringToNativeDateWithTimezoneThrows(startDateStringNullable)
     : null;
+const endDateStringNullable: string | null = cliOptions['endDate'] ?? null;
+const endDate: Date | null =
+  endDateStringNullable != null
+    ? parseDateStringToNativeDateWithTimezoneThrows(endDateStringNullable)
+    : null;
 
 console.log('Parsed startDate:', startDate);
+console.log('Parsed endDate:', endDate);
 
 export type QuantityConfig =
-  | {orderCount: null; startDate: Date}
+  | {endDate: Date | null; orderCount: null; startDate: Date}
   | {orderCount: number; startDate: null};
+
 const quantityConfig: QuantityConfig =
   startDate != null
-    ? {orderCount: null, startDate}
+    ? {endDate, orderCount: null, startDate}
     : {orderCount: nullthrows(orderCountFromCLI), startDate: null};
 
 const OUTPUT_DIR = 'output';
@@ -111,6 +120,7 @@ function shouldLogRequestResponse(urlString: string) {
 
   const rateLimiter = CustomRateLimiter(projectConfig.requestRateLimiter.rps, {
     timeUnit: projectConfig.requestRateLimiter.timeUnit, // milliseconds
+    // uniformDistribution = true means that we'll allow 1 request per timeUnit / rps ms
     uniformDistribution: true,
   });
 
@@ -162,6 +172,7 @@ function shouldLogRequestResponse(urlString: string) {
   const outputDataMetadata = {
     _createdTimestamp: outputTimestamp.valueOf(),
     _params: {
+      endDate: endDateStringNullable,
       orderCount: ordersFetchedCount,
       startDate: startDateStringNullable,
     },
@@ -197,7 +208,11 @@ function shouldLogRequestResponse(urlString: string) {
       name: getOutputDataFilenamePrefix({
         dataType: `orderHistoryData${outputType}`,
         fileNumber: fileOutputNumber,
-        params: {ordersFetchedCount, startDateString: startDateStringNullable},
+        params: {
+          endDateString: endDateStringNullable,
+          ordersFetchedCount,
+          startDateString: startDateStringNullable,
+        },
         totalFiles: skipInvoiceData
           ? ORDER_HISTORY_TYPES_TO_OUTPUT.length
           : TOTAL_OUTPUT_FILE_COUNT,
@@ -362,6 +377,7 @@ function shouldLogRequestResponse(urlString: string) {
           dataType: `invoiceAndOrderData${outputType}`,
           fileNumber: fileOutputNumber,
           params: {
+            endDateString: endDateStringNullable,
             ordersFetchedCount,
             startDateString: startDateStringNullable,
           },
