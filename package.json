@@ -27,8 +27,8 @@
     "@playwright/test": "1.46.1",
     "@types/uuid": "10.0.0",
     "dayjs": "1.11.12",
-    "playwright": "1.46.1",
-    "tsx": "4.17.0",
+    "playwright": "1.55.1",
+    "tsx": "4.21.0",
     "uuid": "10.0.0"
   },
   "devDependencies": {
