@@ -1,18 +1,48 @@
-import {writeFileSync} from 'node:fs';
+import {mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 
 import {getDateTimeString} from './DateUtils';
 
+export function getOutputDataFilenamePrefix({
+  fileNumber,
+  totalFiles,
+  dataType,
+  params,
+}: {
+  dataType: string;
+  fileNumber: number;
+  params: {
+    endDateString: string | null;
+    ordersFetchedCount: number;
+    startDateString: string | null;
+  };
+  totalFiles: number;
+}): string {
+  let paramString = `${params.ordersFetchedCount}-orders`;
+  if (params.startDateString != null) {
+    paramString += `__${params.startDateString}-startDate`;
+  }
+  if (params.endDateString != null) {
+    paramString += `__${params.endDateString}-endDate`;
+  }
+  return `targetOrderData__${fileNumber}-of-${totalFiles}__${dataType}__${paramString}`;
+}
+
 export function writeToJSONFileWithDateTime({
   name,
   data,
+  timestamp,
   basePath,
 }: {
   basePath: string;
   data: unknown;
   name: string;
+  timestamp: Date;
 }): void {
-  const fileName = `${getDateTimeString()}__${name}.json`;
+  // Create the dir if it doesn't exist
+  mkdirSync(basePath, {recursive: true});
+
+  const fileName = `${getDateTimeString(timestamp)}__${name}.json`;
 
   const filePath = path.join(basePath, fileName);
 

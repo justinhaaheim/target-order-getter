@@ -1,23 +1,80 @@
-// import assert from 'node:assert';
-// import {chromium, devices} from 'playwright';
+import type {
+  CombinedOutputData,
+  InvoiceOrderAndAggregationsData,
+  OrderHistoryOutputData,
+} from './TargetAPITypes';
+import type {Request, Response} from 'playwright';
 
-import type {Page, Request, Response} from 'playwright';
-
-import {mkdirSync} from 'fs';
+import {Command} from '@commander-js/extra-typings';
+import nullthrows from 'nullthrows';
 import {v4 as uuidv4} from 'uuid';
 
-import {playwrightAuthContextOptions} from './Auth';
+import {getNewActionQueue} from './ActionQueue';
+import {playwrightAuthContextOptions, playwrightAuthFilePath} from './Auth';
 import {TARGET_ORDER_PAGE_URL} from './Constants';
-import {writeToJSONFileWithDateTime} from './Files';
+import {CustomRateLimiter} from './CustomRateLimiter';
+import {parseDateStringToNativeDateWithTimezoneThrows} from './DateUtils';
+import {
+  getOutputDataFilenamePrefix,
+  writeToJSONFileWithDateTime,
+} from './Files';
+import projectConfig from './projectConfig';
 import {getNewBrowser} from './Setup';
 import {
-  getTargetAPIOrderAllInvoiceData,
-  getTargetAPIOrderHistoryData,
+  getTargetAPIOrderAggregationsDataFromAPI,
+  getTargetAPIOrderAllInvoiceDataFromAPI,
+  getTargetAPIOrderHistoryDataFromAPI,
+  getTargetAPIOrderHistoryFetchConfig,
 } from './TargetAPIData';
+import {
+  CombinedOutputDataZod,
+  OrderHistoryOutputDataZod,
+} from './TargetAPITypes';
+
+type OutputTypes = 'Full' | 'Pruned';
+
+const program = new Command()
+  .name('getTargetOrderData')
+  .option('-o, --orderCount <number>', 'The number of orders to fetch')
+  .option('-s, --startDate <string>', 'The start date for orders to fetch')
+  .option('-e, --endDate <string>', 'The end date for orders to fetch')
+  .option('--skipInvoiceData', 'Skip fetching invoice data', false);
+program.parse();
+const cliOptions = program.opts();
+
+// The number of orders to fetch
+const orderCountFromCLI =
+  cliOptions['orderCount'] != null ? parseInt(cliOptions['orderCount']) : null;
+const skipInvoiceData: boolean = cliOptions['skipInvoiceData'];
+
+const startDateStringNullable: string | null = cliOptions['startDate'] ?? null;
+const startDate: Date | null =
+  startDateStringNullable != null
+    ? parseDateStringToNativeDateWithTimezoneThrows(startDateStringNullable)
+    : null;
+const endDateStringNullable: string | null = cliOptions['endDate'] ?? null;
+const endDate: Date | null =
+  endDateStringNullable != null
+    ? parseDateStringToNativeDateWithTimezoneThrows(endDateStringNullable)
+    : null;
+
+console.log('Parsed startDate:', startDate);
+console.log('Parsed endDate:', endDate);
+
+export type QuantityConfig =
+  | {endDate: Date | null; orderCount: null; startDate: Date}
+  | {orderCount: number; startDate: null};
+
+const quantityConfig: QuantityConfig =
+  startDate != null
+    ? {endDate, orderCount: null, startDate}
+    : {orderCount: nullthrows(orderCountFromCLI), startDate: null};
 
 const OUTPUT_DIR = 'output';
-
-const TIMEOUT_BETWEEN_ORDERS_MS = 0.5 * 1000;
+const ORDER_HISTORY_TYPES_TO_OUTPUT: OutputTypes[] = ['Full', 'Pruned'];
+const COMBINED_OUTPUT_TYPES_TO_OUTPUT: OutputTypes[] = ['Full', 'Pruned'];
+const TOTAL_OUTPUT_FILE_COUNT =
+  ORDER_HISTORY_TYPES_TO_OUTPUT.length + COMBINED_OUTPUT_TYPES_TO_OUTPUT.length;
 
 const TIMEOUT_FOR_INITIAL_AUTHENTICATION = 120 * 1000;
 
@@ -28,7 +85,11 @@ function shouldLogRequestResponse(urlString: string) {
     return true;
   }
 
-  if (url.hostname.includes('assets')) {
+  if (!url.hostname.includes('target.com')) {
+    return false;
+  }
+
+  if (url.hostname.includes('assets') || url.hostname.includes('scene7.com')) {
     return false;
   }
 
@@ -39,19 +100,14 @@ function shouldLogRequestResponse(urlString: string) {
   return true;
 }
 
-type ActionQueueItem = {
-  action: ({page}: {page: Page}) => Promise<any>;
-  attemptsLimit: number;
-  attemptsMade: number;
-  id: string;
-};
-
 // const DEV_ONLY_ORDER_LIMIT = 5;
 
 (async () => {
   // TODO: Target keeps making us login, so let's just authenticate on the same page/context/browser we'll be browsing in rather than recreating it
   // Set auth credentials
   // await authenticateIfNeeded();
+
+  console.log('');
 
   // Setup
   const {
@@ -60,6 +116,12 @@ type ActionQueueItem = {
     page: mainPage,
   } = await getNewBrowser({
     browserContextOptions: playwrightAuthContextOptions,
+  });
+
+  const rateLimiter = CustomRateLimiter(projectConfig.requestRateLimiter.rps, {
+    timeUnit: projectConfig.requestRateLimiter.timeUnit, // milliseconds
+    // uniformDistribution = true means that we'll allow 1 request per timeUnit / rps ms
+    uniformDistribution: true,
   });
 
   // Subscribe to 'request' and 'response' events.
@@ -81,29 +143,121 @@ type ActionQueueItem = {
   await mainPage.waitForURL(`${TARGET_ORDER_PAGE_URL}**`, {
     timeout: TIMEOUT_FOR_INITIAL_AUTHENTICATION,
   });
-  // TODO:
 
-  const orderCount = 10;
+  // await mainPage.waitForTimeout(50 * 1000);
 
-  console.log('📋 Getting order history data...');
-  const orderHistoryData = await getTargetAPIOrderHistoryData({
-    orderCount,
+  /**
+   * Get the order history data
+   */
+  const fetchConfig = await getTargetAPIOrderHistoryFetchConfig({
     page: mainPage,
   });
 
-  const orderInvoiceActionQueue: ActionQueueItem[] = orderHistoryData.map(
-    (order, index) => ({
-      action: async ({page: pageForAllInvoiceData}) => {
-        console.log(
-          `Creating a new page for order ${order['order_number']}...`,
+  console.log('\n\n📋 Getting order history data...');
+  const orderHistoryData = await getTargetAPIOrderHistoryDataFromAPI({
+    fetchConfigFromInitialOrderHistoryRequest: fetchConfig,
+    page: mainPage,
+    quantityConfig,
+    rateLimiter,
+  });
+
+  const ordersFetchedCount = orderHistoryData.length;
+
+  /**
+   * Output the order history data to a file before proceeding in case the remainder fails
+   */
+  const outputTimestamp = new Date();
+  let fileOutputNumber = 1;
+
+  const outputDataMetadata = {
+    _createdTimestamp: outputTimestamp.valueOf(),
+    _params: {
+      endDate: endDateStringNullable,
+      orderCount: ordersFetchedCount,
+      startDate: startDateStringNullable,
+    },
+  };
+
+  ORDER_HISTORY_TYPES_TO_OUTPUT.forEach((outputType) => {
+    const outputDataOrderHistoryFull: OrderHistoryOutputData = {
+      ...outputDataMetadata,
+      orderHistoryData: orderHistoryData,
+    };
+
+    let outputDataOrderHistory = outputDataOrderHistoryFull;
+
+    if (outputType === 'Pruned') {
+      const parseResult = OrderHistoryOutputDataZod.safeParse(
+        outputDataOrderHistoryFull,
+      );
+
+      if (!parseResult.success) {
+        console.error(
+          'Failed to prune order history data before writing to file. Skipping.',
+          parseResult.error,
         );
-        // const newPage = await browser.newPage();
-        console.log('Getting all order invoice data...');
-        const invoicesData = await getTargetAPIOrderAllInvoiceData({
-          context,
+        return;
+      } else {
+        outputDataOrderHistory = parseResult.data;
+      }
+    }
+
+    writeToJSONFileWithDateTime({
+      basePath: OUTPUT_DIR,
+      data: outputDataOrderHistory,
+      name: getOutputDataFilenamePrefix({
+        dataType: `orderHistoryData${outputType}`,
+        fileNumber: fileOutputNumber,
+        params: {
+          endDateString: endDateStringNullable,
+          ordersFetchedCount,
+          startDateString: startDateStringNullable,
+        },
+        totalFiles: skipInvoiceData
+          ? ORDER_HISTORY_TYPES_TO_OUTPUT.length
+          : TOTAL_OUTPUT_FILE_COUNT,
+      }),
+      timestamp: outputTimestamp,
+    });
+
+    fileOutputNumber += 1;
+  });
+
+  if (!skipInvoiceData && orderHistoryData.length > 0) {
+    console.log('\n\n📋 Getting invoice data...');
+    // /**
+    //  * Get all invoice data for each order
+    //  */
+
+    // const orderInvoicePromises = orderHistoryData.map((order, index) => {
+
+    // })
+
+    const {actionQueueCompletePromise, enqueueAction, startQueue} =
+      getNewActionQueue<InvoiceOrderAndAggregationsData>({
+        retryAttempts: projectConfig.retryAttemptsLimit,
+      });
+
+    /**
+     * OLD: Get all invoice data for each order
+     */
+    orderHistoryData.forEach((order, index) => {
+      const action = async (): Promise<InvoiceOrderAndAggregationsData> => {
+        // TODO: pass the rate limiter into each one of these functions, and call it before any API query so that we're rate limiting the query calls themselves.
+        await rateLimiter();
+        console.log(
+          `Getting all order invoice data for order ${order['order_number']}...`,
+        );
+        const invoicesData = await getTargetAPIOrderAllInvoiceDataFromAPI({
+          fetchConfig,
           orderNumber: order['order_number'],
-          page: pageForAllInvoiceData,
         });
+
+        const orderAggregationsData =
+          await getTargetAPIOrderAggregationsDataFromAPI({
+            fetchConfig,
+            orderNumber: order['order_number'],
+          });
 
         console.log(
           `Got order invoice data for order ${
@@ -120,86 +274,133 @@ type ActionQueueItem = {
           _orderDate:
             orderDateString == null || orderDateString.length === 0
               ? null
-              : new Date(orderDateString),
+              : new Date(orderDateString).valueOf(),
           _orderNumber: order['order_number'],
           invoicesData: invoicesData,
+          orderAggregationsData: orderAggregationsData,
           orderHistoryData: order,
         };
-      },
-      attemptsLimit: 3,
-      attemptsMade: 0,
-      id: `${
+      };
+
+      const idSuffix = `${
         order['order_number'] ?? `NO_ORDER_NUMBER-${uuidv4()}`
-      }-${index}-invoiceAction`,
-    }),
-  );
+      }-${index}-invoiceAction`;
 
-  const allOrderData: Array<unknown> = [];
-  let actionRunCount = 0;
+      enqueueAction(action, idSuffix);
+    });
 
-  console.log('📋 Beginning to process action queue...');
-  while (orderInvoiceActionQueue.length > 0) {
-    const currentAction = orderInvoiceActionQueue.shift();
-    if (currentAction == null) {
-      break;
-    }
+    startQueue();
 
-    if (currentAction.attemptsMade >= currentAction.attemptsLimit) {
-      console.log(
-        `Action ${currentAction.id} has already made ${currentAction.attemptsMade}/${currentAction.attemptsLimit} attempts. Skipping.`,
-      );
-      continue;
-    }
+    const combinedOrderData = await actionQueueCompletePromise;
 
-    try {
-      if (actionRunCount > 0) {
-        await mainPage.waitForTimeout(TIMEOUT_BETWEEN_ORDERS_MS);
+    // const combinedOrderData: Array<InvoiceOrderAndAggregationsData> = [];
+    // // let actionRunCount = 0;
+
+    // const actionQueueCompletePromiseFunctions: {
+    //   reject: ((reason?: any) => void) | null;
+    //   resolve: ((value: PromiseLike<void> | void) => void) | null;
+    // } = {reject: null, resolve: null};
+    // const actionQueueCompletePromise = new Promise<void>((resolve, reject) => {
+    //   actionQueueCompletePromiseFunctions.resolve = resolve;
+    //   actionQueueCompletePromiseFunctions.reject = reject;
+    // });
+
+    // const actionQueue = new Queue<() => Promise<void>>();
+
+    // const kickoffNextAction = async () => {
+    //   console.debug(
+    //     `[Queue size: ${actionQueue.size}] Kicking off next action...`,
+    //   );
+    //   const a = actionQueue.dequeue();
+    //   if (a != null) {
+    //     a();
+    //   } else {
+    //     if (actionQueueCompletePromiseFunctions.resolve == null) {
+    //       throw new Error(
+    //         'actionQueueCompletePromiseFunctions.resolve is null. it should not be',
+    //       );
+    //     }
+    //     console.debug(
+    //       'No more actions to kick off. Resolving the actionQueueCompletePromise',
+    //     );
+    //     actionQueueCompletePromiseFunctions.resolve();
+    //   }
+    // };
+
+    // orderInvoiceActionQueue.forEach((action) => {
+    //   // Should this be enqueue(async () => {...}) ?
+    //   actionQueue.enqueue(() =>
+    //     actionQueueWrapperFn({
+    //       action,
+    //       combinedOrderData,
+    //       kickoffNextAction,
+    //       queue: actionQueue,
+    //     }),
+    //   );
+    // });
+
+    // kickoffNextAction();
+
+    // await actionQueueCompletePromise;
+
+    /**
+     * Output the combined order data to a file
+     */
+    COMBINED_OUTPUT_TYPES_TO_OUTPUT.forEach((outputType) => {
+      const combinedOutputDataFull: CombinedOutputData = {
+        ...outputDataMetadata,
+        invoiceAndOrderData: combinedOrderData,
+      };
+
+      let combinedOutputData = combinedOutputDataFull;
+
+      if (outputType === 'Pruned') {
+        const parseResult = CombinedOutputDataZod.safeParse(
+          combinedOutputDataFull,
+        );
+
+        if (!parseResult.success) {
+          console.error(
+            'Failed to prune combined order and invoice data before writing to file. Skipping.',
+            parseResult.error,
+          );
+          return;
+        } else {
+          combinedOutputData = parseResult.data;
+        }
       }
-      actionRunCount += 1;
 
-      console.log(
-        `🟢 Initiating action ${currentAction.id} (attempt ${
-          currentAction.attemptsMade + 1
-        }/${currentAction.attemptsLimit})...`,
-      );
-      const orderData = await currentAction.action({page: mainPage});
-      console.debug(`Action ${currentAction.id} completed successfully.`);
-      allOrderData.push(orderData);
-      console.debug(`Action ${currentAction.id} data pushed.`);
-    } catch (error) {
-      console.warn(`Action ${currentAction.id} threw the following error:`);
-      console.warn(error);
+      writeToJSONFileWithDateTime({
+        basePath: 'output/',
+        data: combinedOutputData,
+        name: getOutputDataFilenamePrefix({
+          dataType: `invoiceAndOrderData${outputType}`,
+          fileNumber: fileOutputNumber,
+          params: {
+            endDateString: endDateStringNullable,
+            ordersFetchedCount,
+            startDateString: startDateStringNullable,
+          },
+          totalFiles: TOTAL_OUTPUT_FILE_COUNT,
+        }),
+        timestamp: outputTimestamp,
+      });
 
-      if (currentAction.attemptsMade + 1 < currentAction.attemptsLimit) {
-        // Queue the action to retry right away. Running these actions in their original order may have some advantages in terms of clarity.
-        console.debug(`Re-queuing action ${currentAction.id}...`);
-        orderInvoiceActionQueue.unshift({
-          ...currentAction,
-          attemptsMade: currentAction.attemptsMade + 1,
-        });
-      }
-    }
-  } // END WHILE
+      fileOutputNumber += 1;
+    });
+  } else {
+    console.log('Skipping invoice data...');
+  }
 
-  // Create the dir if it doesn't exist
-  mkdirSync(OUTPUT_DIR, {recursive: true});
-
-  const outputData = {
-    _createdTimestamp: new Date(),
-    _params: {orderCount},
-    invoiceAndOrderData: allOrderData,
-    orderHistoryData,
-  };
-
-  writeToJSONFileWithDateTime({
-    basePath: 'output/',
-    data: outputData,
-    name: `targetOrderInvoiceData-${orderCount}-orders`,
-  });
-
-  console.log('Doing final timeout before closing browser context...');
+  console.log('\n\nDoing final timeout before closing browser context...');
   await mainPage.waitForTimeout(30 * 1000);
   console.log('Closing browser context...');
+
+  // Save the cookies to the auth file, assuming that's better than resetting from a previous state
+  console.log('Saving browser state to auth file...');
+  await mainPage.context().storageState({
+    path: playwrightAuthFilePath,
+  });
 
   // Teardown
   await context.close();

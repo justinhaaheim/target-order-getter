@@ -34,6 +34,7 @@
     "noPropertyAccessFromIndexSignature": true /* Enforces using indexed accessors for keys declared using an indexed type */,
     "allowUnusedLabels": false /* Disable error reporting for unused labels. */,
     "allowUnreachableCode": false /* Disable error reporting for unreachable code. */,
+    "esModuleInterop": true /* Emit additional JavaScript to ease support for importing CommonJS modules. This enables `allowSyntheticDefaultImports` for type compatibility. */,
 
     /* JavaScript Support */
     "allowJs": true /* Allow JavaScript files to be a part of your program. Use the `checkJS` option to get errors from these files. */,

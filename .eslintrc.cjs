@@ -100,7 +100,7 @@ module.exports = {
     },
   ],
 
-  plugins: ['sort-keys-fix', 'simple-import-sort', 'react-refresh'],
+  plugins: ['sort-keys', 'simple-import-sort', 'react-refresh'],
 
   // Stop ESLint from looking for a configuration file in parent folders
   root: true,
@@ -123,6 +123,8 @@ module.exports = {
 
     'no-unused-vars': NO_UNUSED_VARS_CONFIG,
 
+    'no-warning-comments': [ERROR, {location: 'anywhere', terms: ['nocommit']}],
+
     quotes: [ERROR, 'single', {allowTemplateLiterals: true, avoidEscape: true}],
 
     'react-hooks/exhaustive-deps': ERROR,
@@ -143,6 +145,7 @@ module.exports = {
       },
     ],
 
-    'sort-keys-fix/sort-keys-fix': WARN,
+    'sort-keys': 0, // disable default eslint sort-keys
+    'sort-keys/sort-keys-fix': WARN,
   },
 };
